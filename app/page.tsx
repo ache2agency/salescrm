@@ -10,28 +10,25 @@ export default async function Home() {
   } = await supabase.auth.getUser()
 
   if (!user) {
-    redirect('/login')
+    return redirect('/login')
   }
 
   return (
-  <div>
-    <div
-      style={{
-        padding: 20,
-        borderBottom: '1px solid #eee',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-      }}
-    >
-      <div>Bienvenido {user.email}</div>
+    <div>
+      <div style={{
+        padding:20,
+        borderBottom:"1px solid #eee",
+        display:"flex",
+        justifyContent:"space-between"
+      }}>
+        <div>Bienvenido {user.email}</div>
 
-      <form action="/auth/signout" method="post">
-        <button type="submit">Cerrar sesión</button>
-      </form>
+        <form action="/auth/signout" method="post">
+          <button type="submit">Cerrar sesión</button>
+        </form>
+      </div>
+
+      <CRM />
     </div>
-
-    <CRM />
-  </div>
-)
+  )
 }
