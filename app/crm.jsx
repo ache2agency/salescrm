@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "../lib/supabase";
 
 const STAGES = [
   { id: "nuevo", label: "🎯 Nuevo Lead", color: "#4A90D9", bg: "#1a2a3a" },
@@ -12,18 +13,6 @@ const STAGES = [
 
 const VENDEDORES = ["Ana G.", "Carlos M.", "Tú"];
 const CURSOS = ["Curso de Marketing Digital", "Mentoría 1:1", "Bootcamp Ventas", "Programa Premium"];
-
-const initialLeads = [
-  { id: 1, nombre: "María López", email: "maria@email.com", whatsapp: "+52 55 1234 5678", curso: "Curso de Marketing Digital", vendedor: "Ana G.", stage: "interesado", valor: 4500, fecha: "2026-03-08", notas: "Muy interesada, pidió más info" },
-  { id: 2, nombre: "Roberto Sánchez", email: "roberto@email.com", whatsapp: "+52 55 8765 4321", curso: "Mentoría 1:1", vendedor: "Carlos M.", stage: "propuesta", valor: 12000, fecha: "2026-03-07", notas: "Revisando propuesta esta semana" },
-  { id: 3, nombre: "Sofía Ruiz", email: "sofia@email.com", whatsapp: "+52 55 2222 3333", curso: "Bootcamp Ventas", vendedor: "Tú", stage: "nuevo", valor: 6000, fecha: "2026-03-09", notas: "" },
-  { id: 4, nombre: "Diego Herrera", email: "diego@email.com", whatsapp: "+52 55 4444 5555", curso: "Programa Premium", vendedor: "Ana G.", stage: "cerrado", valor: 18000, fecha: "2026-03-06", notas: "¡Pagó! Enviar acceso." },
-  { id: 5, nombre: "Luisa Méndez", email: "luisa@email.com", whatsapp: "+52 55 6666 7777", curso: "Curso de Marketing Digital", vendedor: "Carlos M.", stage: "contactado", valor: 4500, fecha: "2026-03-05", notas: "Dejó de responder" },
-  { id: 6, nombre: "Andrés Torres", email: "andres@email.com", whatsapp: "+52 55 8888 9999", curso: "Mentoría 1:1", vendedor: "Tú", stage: "nuevo", valor: 12000, fecha: "2026-03-09", notas: "Llegó por Instagram" },
-];
-
-let nextId = 7;
-
 const formatPeso = (v) => `$${Number(v).toLocaleString("es-MX")}`;
 
 const WA_TEMPLATES = {
@@ -34,7 +23,8 @@ const WA_TEMPLATES = {
 };
 
 export default function CRM() {
-  const [leads, setLeads] = useState(initialLeads);
+  const [leads, setLeads] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [view, setView] = useState("kanban");
   const [selectedLead, setSelectedLead] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -49,6 +39,19 @@ export default function CRM() {
     setTimeout(() => setToast(null), 3000);
   };
 
+  // Cargar leads desde Supabase
+  useEffect(() => {
+    fetchLeads();
+  }, []);
+
+  const fetchLeads = async () => {
+    setLoading(true);
+    const { data, error } = await supabase.from("leads").select("*").order("created_at", { ascending: false });
+    if (error) showToast("Error cargando leads", "error");
+    else setLeads(data || []);
+    setLoading(false);
+  };
+
   const filteredLeads = leads.filter(l => {
     const matchV = filterVendedor === "Todos" || l.vendedor === filterVendedor;
     const matchS = l.nombre.toLowerCase().includes(search.toLowerCase()) || l.email.toLowerCase().includes(search.toLowerCase());
@@ -57,7 +60,9 @@ export default function CRM() {
 
   const byStage = (stageId) => filteredLeads.filter(l => l.stage === stageId);
 
-  const moveStage = (leadId, newStage) => {
+  const moveStage = async (leadId, newStage) => {
+    const { error } = await supabase.from("leads").update({ stage: newStage }).eq("id", leadId);
+    if (error) return showToast("Error actualizando", "error");
     setLeads(prev => prev.map(l => l.id === leadId ? { ...l, stage: newStage } : l));
     showToast("Lead movido a " + STAGES.find(s => s.id === newStage)?.label);
   };
@@ -66,19 +71,28 @@ export default function CRM() {
     if (dragId) { moveStage(dragId, stageId); setDragId(null); }
   };
 
-  const addLead = () => {
+  const addLead = async () => {
     if (!newLead.nombre || !newLead.email) return showToast("Nombre y email son requeridos", "error");
-    const lead = { ...newLead, id: nextId++, stage: "nuevo", fecha: new Date().toISOString().slice(0, 10), valor: Number(newLead.valor) || 0 };
-    setLeads(prev => [lead, ...prev]);
+    const lead = { ...newLead, stage: "nuevo", fecha: new Date().toISOString().slice(0, 10), valor: Number(newLead.valor) || 0 };
+    const { data, error } = await supabase.from("leads").insert([lead]).select();
+    if (error) return showToast("Error agregando lead", "error");
+    setLeads(prev => [data[0], ...prev]);
     setShowForm(false);
     setNewLead({ nombre: "", email: "", whatsapp: "", curso: CURSOS[0], vendedor: VENDEDORES[0], valor: "", notas: "" });
     showToast("Lead agregado ✓");
   };
 
-  const deleteLead = (id) => {
+  const deleteLead = async (id) => {
+    const { error } = await supabase.from("leads").delete().eq("id", id);
+    if (error) return showToast("Error eliminando", "error");
     setLeads(prev => prev.filter(l => l.id !== id));
     setSelectedLead(null);
     showToast("Lead eliminado");
+  };
+
+  const updateNotas = async (id, notas) => {
+    await supabase.from("leads").update({ notas }).eq("id", id);
+    setLeads(prev => prev.map(l => l.id === id ? { ...l, notas } : l));
   };
 
   const totalRevenue = leads.filter(l => l.stage === "cerrado").reduce((a, b) => a + b.valor, 0);
@@ -127,6 +141,7 @@ export default function CRM() {
         .nav-btn:not(.active) { color: #666; }
         .nav-btn:not(.active):hover { color: #E8A838; }
         textarea { resize: vertical; min-height: 60px; }
+        .loading { display: flex; align-items: center; justify-content: center; height: 200px; font-size: 14px; color: #555; }
       `}</style>
 
       <div style={{ borderBottom: "1px solid #1e1e1e", padding: "0 24px" }}>
@@ -168,7 +183,9 @@ export default function CRM() {
           <div style={{ marginLeft: "auto", fontSize: 12, color: "#555" }}>{filteredLeads.length} leads mostrados</div>
         </div>
 
-        {view === "kanban" && (
+        {loading && <div className="loading">Cargando leads...</div>}
+
+        {!loading && view === "kanban" && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 14, overflowX: "auto" }}>
             {STAGES.map(stage => (
               <div key={stage.id}
@@ -198,7 +215,7 @@ export default function CRM() {
                       <div style={{ fontSize: 10, color: "#555", marginBottom: 8 }}>{lead.curso}</div>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <span style={{ fontSize: 12, color: stage.color, fontWeight: 600 }}>{formatPeso(lead.valor)}</span>
-                        <span style={{ fontSize: 10, color: "#555" }}>{lead.vendedor.split(" ")[0]}</span>
+                        <span style={{ fontSize: 10, color: "#555" }}>{lead.vendedor?.split(" ")[0]}</span>
                       </div>
                       {lead.notas && (
                         <div style={{ marginTop: 8, fontSize: 10, color: "#666", borderTop: "1px solid #222", paddingTop: 6, lineHeight: 1.4 }}>
@@ -216,7 +233,7 @@ export default function CRM() {
           </div>
         )}
 
-        {view === "lista" && (
+        {!loading && view === "lista" && (
           <div style={{ background: "#161616", border: "1px solid #2a2a2a", borderRadius: 10, overflow: "hidden" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
@@ -230,7 +247,7 @@ export default function CRM() {
                 {filteredLeads.map((lead) => {
                   const stage = STAGES.find(s => s.id === lead.stage);
                   return (
-                    <tr key={lead.id} style={{ borderBottom: "1px solid #1e1e1e", transition: "background 0.15s", cursor: "pointer" }}
+                    <tr key={lead.id} style={{ borderBottom: "1px solid #1e1e1e", cursor: "pointer" }}
                       onMouseEnter={e => e.currentTarget.style.background = "#1e1e1e"}
                       onMouseLeave={e => e.currentTarget.style.background = "transparent"}
                       onClick={() => setSelectedLead(lead)}
@@ -296,8 +313,8 @@ export default function CRM() {
                 <div style={{ marginBottom: 20 }}>
                   <div style={{ fontSize: 10, color: "#555", letterSpacing: 1, marginBottom: 8 }}>NOTAS</div>
                   <textarea className="input" style={{ fontSize: 12, lineHeight: 1.5 }}
-                    value={lead.notas}
-                    onChange={e => setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, notas: e.target.value } : l))}
+                    value={lead.notas || ""}
+                    onChange={e => { updateNotas(lead.id, e.target.value); setSelectedLead({...lead, notas: e.target.value}); }}
                     placeholder="Agrega notas sobre este lead..."
                   />
                 </div>
