@@ -11,7 +11,16 @@ export default function Login() {
   const router = useRouter();
   const supabase = createClient();
 
+  const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
   const handleLogin = async () => {
+    if (!email.trim() || !isValidEmail(email.trim())) {
+      return setError("Ingresa un email válido");
+    }
+    if (!password || password.length < 6) {
+      return setError("La contraseña debe tener al menos 6 caracteres");
+    }
+
     setLoading(true);
     setError("");
     const { error } = await supabase.auth.signInWithPassword({ email, password });

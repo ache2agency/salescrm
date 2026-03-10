@@ -2,6 +2,20 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 
+/**
+ * @typedef {Object} Lead
+ * @property {string} id
+ * @property {string} nombre
+ * @property {string} email
+ * @property {string} whatsapp
+ * @property {string} curso
+ * @property {string} vendedor
+ * @property {number} valor
+ * @property {string} stage
+ * @property {string} fecha
+ * @property {string} [notas]
+ */
+
 const STAGES = [
   { id: "nuevo", label: "🎯 Nuevo Lead", color: "#4A90D9", bg: "#1a2a3a" },
   { id: "contactado", label: "📞 Contactado", color: "#E8A838", bg: "#2a1f0a" },
@@ -13,7 +27,7 @@ const STAGES = [
 
 const VENDEDORES = ["Ana G.", "Carlos M.", "Tú"];
 const CURSOS = ["Curso de Marketing Digital", "Mentoría 1:1", "Bootcamp Ventas", "Programa Premium"];
-const formatPeso = (v) => `$${Number(v).toLocaleString("es-MX")}`;
+const formatPeso = (v) => `$${Number(v || 0).toLocaleString("es-MX")}`;
 
 const WA_TEMPLATES = {
   contactado: (nombre, curso) => `Hola ${nombre} 👋 Vi que te interesó *${curso}*. ¿Tienes 5 minutos para platicarte de qué trata?`,
@@ -23,9 +37,11 @@ const WA_TEMPLATES = {
 };
 
 export default function CRM() {
+  /** @type {[Lead[], (value: Lead[]) => void]} */
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState("kanban");
+  /** @type {[Lead | null, (value: Lead | null) => void]} */
   const [selectedLead, setSelectedLead] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [filterVendedor, setFilterVendedor] = useState("Todos");
@@ -71,9 +87,36 @@ export default function CRM() {
     if (dragId) { moveStage(dragId, stageId); setDragId(null); }
   };
 
+  const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+  const isValidPhone = (phone) => {
+    if (!phone) return true;
+    const digits = phone.replace(/\D/g, "");
+    return digits.length >= 8;
+  };
+
   const addLead = async () => {
-    if (!newLead.nombre || !newLead.email) return showToast("Nombre y email son requeridos", "error");
-    const lead = { ...newLead, stage: "nuevo", fecha: new Date().toISOString().slice(0, 10), valor: Number(newLead.valor) || 0 };
+    if (!newLead.nombre.trim()) {
+      return showToast("El nombre es obligatorio", "error");
+    }
+    if (!newLead.email.trim() || !isValidEmail(newLead.email.trim())) {
+      return showToast("Ingresa un email válido", "error");
+    }
+    if (!isValidPhone(newLead.whatsapp)) {
+      return showToast("El WhatsApp debe tener al menos 8 dígitos", "error");
+    }
+
+    const valorNumerico = Number(newLead.valor);
+    if (Number.isNaN(valorNumerico) || valorNumerico < 0) {
+      return showToast("El valor estimado debe ser un número mayor o igual a 0", "error");
+    }
+
+    const lead = {
+      ...newLead,
+      stage: "nuevo",
+      fecha: new Date().toISOString().slice(0, 10),
+      valor: valorNumerico || 0,
+    };
     const { data, error } = await supabase.from("leads").insert([lead]).select();
     if (error) return showToast("Error agregando lead", "error");
     setLeads(prev => [data[0], ...prev]);
