@@ -11,7 +11,19 @@ export default function Registro() {
   const [error, setError] = useState("");
   const router = useRouter();
 
+  const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
   const handleRegistro = async () => {
+    if (!nombre.trim()) {
+      return setError("El nombre es obligatorio");
+    }
+    if (!email.trim() || !isValidEmail(email.trim())) {
+      return setError("Ingresa un email válido");
+    }
+    if (!password || password.length < 6) {
+      return setError("La contraseña debe tener al menos 6 caracteres");
+    }
+
     setLoading(true);
     setError("");
     const { error } = await supabase.auth.signUp({ email, password, options: { data: { nombre } } });
