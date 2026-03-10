@@ -12,10 +12,11 @@ export async function createClient() {
         getAll() {
           return cookieStore.getAll()
         },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          )
+        // En Server Components de Next.js, modificar cookies directamente
+        // causa el error "Cookies can only be modified in a Server Action or Route Handler".
+        // Para evitarlo aquí, ignoramos los intentos de escritura.
+        setAll() {
+          // no-op en este contexto
         },
       },
     }
