@@ -47,7 +47,7 @@ export default async function Home() {
         </form>
       </div>
 
-      <CRM currentUser={{ id: user.id, email: user.email!, nombre, role }} />
+      <CRM />
     </div>
   )
 }
