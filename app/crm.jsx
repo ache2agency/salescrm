@@ -36,6 +36,16 @@ export default function CRM() {
   const [currentProfile, setCurrentProfile] = useState(null);
   const [vendedores, setVendedores] = useState([]);
   const [newLead, setNewLead] = useState({ nombre: "", email: "", whatsapp: "", curso: CURSOS[0], valor: "", notas: "", asignado_a: "" });
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState([
+    {
+      role: "assistant",
+      content:
+        "Hola, soy tu asistente de ventas INFOSALES. Cuéntame sobre tus leads y te doy recomendaciones concretas para cerrarlos.",
+    },
+  ]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
 
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
@@ -156,6 +166,51 @@ export default function CRM() {
     const msg = encodeURIComponent(template(lead.nombre.split(" ")[0], lead.curso));
     const num = lead.whatsapp.replace(/\D/g, "");
     window.open(`https://wa.me/${num}?text=${msg}`, "_blank");
+  };
+
+  const leadsForAI = leads.map((l) => ({
+    id: l.id,
+    nombre: l.nombre,
+    email: l.email,
+    curso: l.curso,
+    stage: l.stage,
+    valor: l.valor,
+    asignado_a: getNombreVendedor(l.asignado_a),
+    fecha: l.fecha,
+  }));
+
+  const sendChat = async () => {
+    if (!chatInput.trim() || chatLoading) return;
+    const newMessages = [
+      ...chatMessages,
+      { role: "user", content: chatInput.trim() },
+    ];
+    setChatMessages(newMessages);
+    setChatInput("");
+    setChatLoading(true);
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: newMessages, leads: leadsForAI }),
+      });
+
+      if (!res.ok) {
+        showToast("Error hablando con el asistente de ventas", "error");
+        setChatLoading(false);
+        return;
+      }
+
+      const data = await res.json();
+      const reply = data?.reply?.content || "No pude generar una respuesta.";
+
+      setChatMessages((prev) => [...prev, { role: "assistant", content: reply }]);
+    } catch (e) {
+      showToast("Error de red con el asistente", "error");
+    } finally {
+      setChatLoading(false);
+    }
   };
 
   return (
@@ -475,6 +530,163 @@ export default function CRM() {
                 <button className="btn btn-primary" style={{ flex: 2 }} onClick={addLead}>AGREGAR LEAD →</button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* CHATBOT IA */}
+      <button
+        onClick={() => setChatOpen((v) => !v)}
+        style={{
+          position: "fixed",
+          bottom: 24,
+          right: 24,
+          zIndex: 900,
+          width: 52,
+          height: 52,
+          borderRadius: "50%",
+          border: "none",
+          background: "#E8A838",
+          color: "#0e0e0e",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
+          cursor: "pointer",
+          fontSize: 22,
+        }}
+        aria-label="Abrir asistente de ventas"
+      >
+        💬
+      </button>
+
+      {chatOpen && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: 88,
+            right: 24,
+            width: 360,
+            maxHeight: 520,
+            background: "#0e0e0e",
+            borderRadius: 12,
+            border: "1px solid #2a2a2a",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            boxShadow: "0 16px 40px rgba(0,0,0,0.6)",
+            zIndex: 901,
+          }}
+        >
+          <div
+            style={{
+              padding: "10px 14px",
+              borderBottom: "1px solid #2a2a2a",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              background: "#111",
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "#E8A838",
+                  letterSpacing: 1.5,
+                  textTransform: "uppercase",
+                }}
+              >
+                Asistente INFOSALES
+              </div>
+              <div style={{ fontSize: 11, color: "#777", marginTop: 2 }}>
+                IA enfocada en ventas y tus leads
+              </div>
+            </div>
+            <button
+              className="btn-ghost"
+              style={{ border: "none", background: "transparent", color: "#777" }}
+              onClick={() => setChatOpen(false)}
+            >
+              ✕
+            </button>
+          </div>
+
+          <div
+            style={{
+              padding: "10px 12px",
+              flex: 1,
+              overflowY: "auto",
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+            }}
+          >
+            {chatMessages.map((m, idx) => (
+              <div
+                key={idx}
+                style={{
+                  alignSelf: m.role === "user" ? "flex-end" : "flex-start",
+                  maxWidth: "85%",
+                  background:
+                    m.role === "user" ? "#E8A838" : "rgba(255,255,255,0.03)",
+                  color: m.role === "user" ? "#0e0e0e" : "#e0e0e0",
+                  borderRadius: 8,
+                  padding: "8px 10px",
+                  fontSize: 12,
+                  lineHeight: 1.5,
+                  border:
+                    m.role === "user"
+                      ? "none"
+                      : "1px solid rgba(255,255,255,0.05)",
+                }}
+              >
+                {m.content}
+              </div>
+            ))}
+            {chatLoading && (
+              <div
+                style={{
+                  alignSelf: "flex-start",
+                  fontSize: 11,
+                  color: "#777",
+                }}
+              >
+                Pensando recomendaciones...
+              </div>
+            )}
+          </div>
+
+          <div
+            style={{
+              borderTop: "1px solid #2a2a2a",
+              padding: "8px 10px",
+              background: "#111",
+              display: "flex",
+              gap: 6,
+            }}
+          >
+            <input
+              className="input"
+              style={{ fontSize: 12, padding: "8px 10px" }}
+              placeholder="Pregúntame cómo avanzar tus leads..."
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  sendChat();
+                }
+              }}
+            />
+            <button
+              className="btn btn-primary"
+              style={{ padding: "0 14px", fontSize: 12, whiteSpace: "nowrap" }}
+              onClick={sendChat}
+              disabled={chatLoading}
+            >
+              {chatLoading ? "Enviando..." : "Enviar"}
+            </button>
           </div>
         </div>
       )}
