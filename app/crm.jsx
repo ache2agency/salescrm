@@ -1,28 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
-import { supabase } from "../lib/supabase";
-
-/**
- * @typedef {Object} Lead
- * @property {string} id
- * @property {string} nombre
- * @property {string} email
- * @property {string} whatsapp
- * @property {string} curso
- * @property {string} vendedor
- * @property {number} valor
- * @property {string} stage
- * @property {string} fecha
- * @property {string} [notas]
- */
-
-/**
- * @typedef {Object} CurrentUser
- * @property {string} id
- * @property {string} email
- * @property {string} nombre
- * @property {string} role
- */
+import { createClient } from "@/utils/supabase/client";
+const supabase = createClient();
 
 const STAGES = [
   { id: "nuevo", label: "🎯 Nuevo Lead", color: "#4A90D9", bg: "#1a2a3a" },
@@ -33,9 +12,8 @@ const STAGES = [
   { id: "perdido", label: "❌ Perdido", color: "#555", bg: "#1a1a1a" },
 ];
 
-const VENDEDORES = ["Ana G.", "Carlos M.", "Tú"];
 const CURSOS = ["Curso de Marketing Digital", "Mentoría 1:1", "Bootcamp Ventas", "Programa Premium"];
-const formatPeso = (v) => `$${Number(v || 0).toLocaleString("es-MX")}`;
+const formatPeso = (v) => `$${Number(v).toLocaleString("es-MX")}`;
 
 const WA_TEMPLATES = {
   contactado: (nombre, curso) => `Hola ${nombre} 👋 Vi que te interesó *${curso}*. ¿Tienes 5 minutos para platicarte de qué trata?`,
@@ -44,167 +22,134 @@ const WA_TEMPLATES = {
   cerrado: (nombre, curso) => `¡Felicidades ${nombre}! 🎉 Ya eres parte de *${curso}*. En breve recibes tus accesos. ¡Éxito!`,
 };
 
-/**
- * @param {{ currentUser?: CurrentUser }} props
- */
-export default function CRM({ currentUser } = {}) {
-  const isAdmin = currentUser?.role === "admin";
-  const vendedorActual = currentUser?.nombre || currentUser?.email || "Tú";
-
-  /** @type {[Lead[], (value: Lead[]) => void]} */
+export default function CRM() {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState("kanban");
-  /** @type {[Lead | null, (value: Lead | null) => void]} */
   const [selectedLead, setSelectedLead] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [filterVendedor, setFilterVendedor] = useState("Todos");
   const [search, setSearch] = useState("");
   const [dragId, setDragId] = useState(null);
   const [toast, setToast] = useState(null);
-  const [newLead, setNewLead] = useState({
-    nombre: "",
-    email: "",
-    whatsapp: "",
-    curso: CURSOS[0],
-    vendedor: vendedorActual,
-    valor: "",
-    notas: "",
-  });
+  const [currentUser, setCurrentUser] = useState(null);
+  const [currentProfile, setCurrentProfile] = useState(null);
+  const [vendedores, setVendedores] = useState([]);
+  const [newLead, setNewLead] = useState({ nombre: "", email: "", whatsapp: "", curso: CURSOS[0], valor: "", notas: "", asignado_a: "" });
 
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3000);
   };
 
-  const vendedoresDisponibles = Array.from(
-    new Set([vendedorActual, ...VENDEDORES])
-  );
-  const vendedoresParaAsignar = isAdmin ? vendedoresDisponibles : [vendedorActual];
+  const isAdmin = currentProfile?.rol === "admin";
 
-  // Cargar leads desde Supabase
   useEffect(() => {
-    fetchLeads();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin, vendedorActual]);
+    loadUser();
+  }, []);
 
-  const fetchLeads = async () => {
-    setLoading(true);
-    let query = supabase
-      .from("leads")
-      .select("*")
-      .order("created_at", { ascending: false });
+  const loadUser = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    setCurrentUser(user);
 
-    if (!isAdmin) {
-      query = query.eq("vendedor", vendedorActual);
+    // Cargar o crear perfil
+    let { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+    if (!profile) {
+      const { data: newProfile } = await supabase.from("profiles")
+        .insert([{ id: user.id, email: user.email, nombre: user.email.split("@")[0], rol: "vendedor" }])
+        .select().single();
+      profile = newProfile;
     }
+    setCurrentProfile(profile);
 
+    // Cargar lista de vendedores (todos los perfiles)
+    const { data: allProfiles } = await supabase.from("profiles").select("*");
+    setVendedores(allProfiles || []);
+
+    // Preseleccionar el usuario actual como asignado
+    setNewLead(prev => ({ ...prev, asignado_a: user.id }));
+
+    fetchLeads(user.id, profile?.rol === "admin");
+  };
+
+  const fetchLeads = async (userId, admin) => {
+    setLoading(true);
+    let query = supabase.from("leads").select("*").order("created_at", { ascending: false });
+    // Vendedores solo ven sus leads asignados
+    if (!admin) {
+      query = query.eq("asignado_a", userId);
+    }
     const { data, error } = await query;
     if (error) showToast("Error cargando leads", "error");
     else setLeads(data || []);
     setLoading(false);
   };
 
-  const filteredLeads = leads.filter((l) => {
-    const matchV = filterVendedor === "Todos" || l.vendedor === filterVendedor;
-    const matchS =
-      l.nombre.toLowerCase().includes(search.toLowerCase()) ||
-      l.email.toLowerCase().includes(search.toLowerCase());
+  const filteredLeads = leads.filter(l => {
+    const matchV = filterVendedor === "Todos" || l.asignado_a === filterVendedor;
+    const matchS = l.nombre.toLowerCase().includes(search.toLowerCase()) || l.email.toLowerCase().includes(search.toLowerCase());
     return matchV && matchS;
   });
 
-  const byStage = (stageId) => filteredLeads.filter((l) => l.stage === stageId);
+  const byStage = (stageId) => filteredLeads.filter(l => l.stage === stageId);
 
   const moveStage = async (leadId, newStage) => {
-    const { error } = await supabase
-      .from("leads")
-      .update({ stage: newStage })
-      .eq("id", leadId);
+    const { error } = await supabase.from("leads").update({ stage: newStage }).eq("id", leadId);
     if (error) return showToast("Error actualizando", "error");
-    setLeads((prev) =>
-      prev.map((l) => (l.id === leadId ? { ...l, stage: newStage } : l))
-    );
-    showToast("Lead movido a " + STAGES.find((s) => s.id === newStage)?.label);
+    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, stage: newStage } : l));
+    showToast("Lead movido a " + STAGES.find(s => s.id === newStage)?.label);
   };
 
   const handleDrop = (stageId) => {
     if (dragId) { moveStage(dragId, stageId); setDragId(null); }
   };
 
-  const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-
-  const isValidPhone = (phone) => {
-    if (!phone) return true;
-    const digits = phone.replace(/\D/g, "");
-    return digits.length >= 8;
-  };
-
   const addLead = async () => {
-    if (!newLead.nombre.trim()) {
-      return showToast("El nombre es obligatorio", "error");
-    }
-    if (!newLead.email.trim() || !isValidEmail(newLead.email.trim())) {
-      return showToast("Ingresa un email válido", "error");
-    }
-    if (!isValidPhone(newLead.whatsapp)) {
-      return showToast("El WhatsApp debe tener al menos 8 dígitos", "error");
-    }
-
-    const valorNumerico = Number(newLead.valor);
-    if (Number.isNaN(valorNumerico) || valorNumerico < 0) {
-      return showToast("El valor estimado debe ser un número mayor o igual a 0", "error");
-    }
-
+    if (!newLead.nombre || !newLead.email) return showToast("Nombre y email son requeridos", "error");
     const lead = {
       ...newLead,
       stage: "nuevo",
       fecha: new Date().toISOString().slice(0, 10),
-      valor: valorNumerico || 0,
+      valor: Number(newLead.valor) || 0,
+      user_id: currentUser.id,
+      asignado_a: newLead.asignado_a || currentUser.id,
     };
     const { data, error } = await supabase.from("leads").insert([lead]).select();
     if (error) return showToast("Error agregando lead", "error");
     setLeads(prev => [data[0], ...prev]);
     setShowForm(false);
-    setNewLead({ nombre: "", email: "", whatsapp: "", curso: CURSOS[0], vendedor: VENDEDORES[0], valor: "", notas: "" });
+    setNewLead({ nombre: "", email: "", whatsapp: "", curso: CURSOS[0], valor: "", notas: "", asignado_a: currentUser.id });
     showToast("Lead agregado ✓");
   };
 
   const deleteLead = async (id) => {
-    if (!isAdmin) return;
     const { error } = await supabase.from("leads").delete().eq("id", id);
     if (error) return showToast("Error eliminando", "error");
-    setLeads((prev) => prev.filter((l) => l.id !== id));
+    setLeads(prev => prev.filter(l => l.id !== id));
     setSelectedLead(null);
     showToast("Lead eliminado");
   };
 
   const updateNotas = async (id, notas) => {
     await supabase.from("leads").update({ notas }).eq("id", id);
-    setLeads((prev) =>
-      prev.map((l) => (l.id === id ? { ...l, notas } : l))
-    );
+    setLeads(prev => prev.map(l => l.id === id ? { ...l, notas } : l));
   };
 
-  const updateVendedor = async (id, vendedor) => {
-    const { error } = await supabase.from("leads").update({ vendedor }).eq("id", id);
-    if (error) return showToast("Error actualizando vendedor", "error");
-    setLeads((prev) =>
-      prev.map((l) => (l.id === id ? { ...l, vendedor } : l))
-    );
-    showToast("Vendedor actualizado");
+  const reasignarLead = async (leadId, nuevoAsignadoId) => {
+    const { error } = await supabase.from("leads").update({ asignado_a: nuevoAsignadoId }).eq("id", leadId);
+    if (error) return showToast("Error reasignando", "error");
+    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, asignado_a: nuevoAsignadoId } : l));
+    setSelectedLead(prev => ({ ...prev, asignado_a: nuevoAsignadoId }));
+    const nombre = vendedores.find(v => v.id === nuevoAsignadoId)?.nombre || "vendedor";
+    showToast(`Lead reasignado a ${nombre} ✓`);
   };
 
-  const totalRevenue = leads
-    .filter((l) => l.stage === "cerrado")
-    .reduce((a, b) => a + b.valor, 0);
-  const pipelineValue = leads
-    .filter((l) => !["cerrado", "perdido"].includes(l.stage))
-    .reduce((a, b) => a + b.valor, 0);
-  const convRate = leads.length
-    ? Math.round(
-        (leads.filter((l) => l.stage === "cerrado").length / leads.length) * 100
-      )
-    : 0;
+  const getNombreVendedor = (id) => vendedores.find(v => v.id === id)?.nombre || vendedores.find(v => v.id === id)?.email?.split("@")[0] || "—";
+
+  const totalRevenue = leads.filter(l => l.stage === "cerrado").reduce((a, b) => a + b.valor, 0);
+  const pipelineValue = leads.filter(l => !["cerrado", "perdido"].includes(l.stage)).reduce((a, b) => a + b.valor, 0);
+  const convRate = leads.length ? Math.round((leads.filter(l => l.stage === "cerrado").length / leads.length) * 100) : 0;
 
   const openWA = (lead) => {
     const template = WA_TEMPLATES[lead.stage] || WA_TEMPLATES["contactado"];
@@ -249,28 +194,30 @@ export default function CRM({ currentUser } = {}) {
         .nav-btn:not(.active):hover { color: #E8A838; }
         textarea { resize: vertical; min-height: 60px; }
         .loading { display: flex; align-items: center; justify-content: center; height: 200px; font-size: 14px; color: #555; }
+        .admin-badge { background: #E8A83822; color: #E8A838; border: 1px solid #E8A83844; border-radius: 4px; font-size: 10px; padding: 2px 8px; letter-spacing: 1px; }
       `}</style>
 
+      {/* HEADER */}
       <div style={{ borderBottom: "1px solid #1e1e1e", padding: "0 24px" }}>
         <div style={{ maxWidth: 1400, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 60 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
             <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, letterSpacing: 3, color: "#E8A838" }}>INFOSALES</span>
             <span style={{ fontSize: 11, color: "#555", letterSpacing: 2 }}>CRM v1.0</span>
-            {isAdmin && (
-              <span style={{ fontSize: 10, marginLeft: 8, padding: "2px 8px", borderRadius: 999, background: "#1a1a1a", color: "#E8A838", border: "1px solid #E8A838" }}>
-                ADMIN
-              </span>
-            )}
+            {isAdmin && <span className="admin-badge">ADMIN</span>}
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button className={`nav-btn ${view === "kanban" ? "active" : ""}`} onClick={() => setView("kanban")}>KANBAN</button>
             <button className={`nav-btn ${view === "lista" ? "active" : ""}`} onClick={() => setView("lista")}>LISTA</button>
           </div>
-          <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ NUEVO LEAD</button>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ fontSize: 11, color: "#555" }}>{currentProfile?.email || currentUser?.email}</span>
+            <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ NUEVO LEAD</button>
+          </div>
         </div>
       </div>
 
       <div style={{ maxWidth: 1400, margin: "0 auto", padding: "24px" }}>
+        {/* STATS */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
           {[
             { label: "PIPELINE TOTAL", value: formatPeso(pipelineValue), sub: `${filteredLeads.filter(l => !["cerrado","perdido"].includes(l.stage)).length} leads activos`, color: "#4A90D9" },
@@ -286,19 +233,21 @@ export default function CRM({ currentUser } = {}) {
           ))}
         </div>
 
+        {/* FILTROS */}
         <div style={{ display: "flex", gap: 12, marginBottom: 24, alignItems: "center" }}>
           <input className="input" style={{ maxWidth: 260 }} placeholder="🔍  Buscar lead..." value={search} onChange={e => setSearch(e.target.value)} />
-          <select className="select" style={{ maxWidth: 180 }} value={filterVendedor} onChange={e => setFilterVendedor(e.target.value)}>
-            <option>Todos</option>
-            {Array.from(new Set(leads.map(l => l.vendedor).filter(Boolean).concat(vendedoresDisponibles))).map(v => (
-              <option key={v}>{v}</option>
-            ))}
-          </select>
+          {isAdmin && (
+            <select className="select" style={{ maxWidth: 200 }} value={filterVendedor} onChange={e => setFilterVendedor(e.target.value)}>
+              <option value="Todos">Todos los vendedores</option>
+              {vendedores.map(v => <option key={v.id} value={v.id}>{v.nombre || v.email}</option>)}
+            </select>
+          )}
           <div style={{ marginLeft: "auto", fontSize: 12, color: "#555" }}>{filteredLeads.length} leads mostrados</div>
         </div>
 
         {loading && <div className="loading">Cargando leads...</div>}
 
+        {/* KANBAN */}
         {!loading && view === "kanban" && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 14, overflowX: "auto" }}>
             {STAGES.map(stage => (
@@ -329,7 +278,7 @@ export default function CRM({ currentUser } = {}) {
                       <div style={{ fontSize: 10, color: "#555", marginBottom: 8 }}>{lead.curso}</div>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <span style={{ fontSize: 12, color: stage.color, fontWeight: 600 }}>{formatPeso(lead.valor)}</span>
-                        <span style={{ fontSize: 10, color: "#555" }}>{lead.vendedor?.split(" ")[0]}</span>
+                        <span style={{ fontSize: 10, color: "#555" }}>{getNombreVendedor(lead.asignado_a)}</span>
                       </div>
                       {lead.notas && (
                         <div style={{ marginTop: 8, fontSize: 10, color: "#666", borderTop: "1px solid #222", paddingTop: 6, lineHeight: 1.4 }}>
@@ -347,12 +296,13 @@ export default function CRM({ currentUser } = {}) {
           </div>
         )}
 
+        {/* LISTA */}
         {!loading && view === "lista" && (
           <div style={{ background: "#161616", border: "1px solid #2a2a2a", borderRadius: 10, overflow: "hidden" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid #2a2a2a" }}>
-                  {["NOMBRE", "CURSO", "ETAPA", "VALOR", "VENDEDOR", "FECHA", "ACCIONES"].map(h => (
+                  {["NOMBRE", "CURSO", "ETAPA", "VALOR", "ASIGNADO A", "FECHA", "ACCIONES"].map(h => (
                     <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 10, color: "#555", letterSpacing: 1.5, fontWeight: 500 }}>{h}</th>
                   ))}
                 </tr>
@@ -375,7 +325,7 @@ export default function CRM({ currentUser } = {}) {
                         <span className="tag" style={{ background: stage?.color + "22", color: stage?.color }}>{stage?.label}</span>
                       </td>
                       <td style={{ padding: "12px 16px", color: stage?.color, fontWeight: 600 }}>{formatPeso(lead.valor)}</td>
-                      <td style={{ padding: "12px 16px", color: "#aaa", fontSize: 12 }}>{lead.vendedor}</td>
+                      <td style={{ padding: "12px 16px", color: "#aaa", fontSize: 12 }}>{getNombreVendedor(lead.asignado_a)}</td>
                       <td style={{ padding: "12px 16px", color: "#555", fontSize: 11 }}>{lead.fecha}</td>
                       <td style={{ padding: "12px 16px" }} onClick={e => e.stopPropagation()}>
                         <button className="btn btn-wa" onClick={() => openWA(lead)}>WA</button>
@@ -389,6 +339,7 @@ export default function CRM({ currentUser } = {}) {
         )}
       </div>
 
+      {/* MODAL DETALLE LEAD */}
       {selectedLead && (() => {
         const lead = leads.find(l => l.id === selectedLead.id) || selectedLead;
         const stage = STAGES.find(s => s.id === lead.stage);
@@ -403,6 +354,7 @@ export default function CRM({ currentUser } = {}) {
                   </div>
                   <button className="btn btn-ghost" onClick={() => setSelectedLead(null)}>✕</button>
                 </div>
+
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
                   <div style={{ background: "#1a1a1a", borderRadius: 8, padding: 14 }}>
                     <div style={{ fontSize: 10, color: "#555", letterSpacing: 1, marginBottom: 6 }}>CURSO</div>
@@ -413,24 +365,27 @@ export default function CRM({ currentUser } = {}) {
                     <div style={{ fontSize: 18, color: stage?.color, fontFamily: "'Bebas Neue'", letterSpacing: 1 }}>{formatPeso(lead.valor)}</div>
                   </div>
                 </div>
+
+                {/* REASIGNAR — solo admin */}
                 {isAdmin && (
                   <div style={{ marginBottom: 20 }}>
-                    <div style={{ fontSize: 10, color: "#555", letterSpacing: 1, marginBottom: 8 }}>VENDEDOR ASIGNADO</div>
-                    <select
-                      className="select"
-                      value={lead.vendedor}
-                      onChange={e => {
-                        const nuevoVendedor = e.target.value;
-                        updateVendedor(lead.id, nuevoVendedor);
-                        setSelectedLead({ ...lead, vendedor: nuevoVendedor });
-                      }}
-                    >
-                      {vendedoresDisponibles.map(v => (
-                        <option key={v}>{v}</option>
+                    <div style={{ fontSize: 10, color: "#555", letterSpacing: 1, marginBottom: 8 }}>ASIGNADO A</div>
+                    <select className="select" value={lead.asignado_a || ""} onChange={e => reasignarLead(lead.id, e.target.value)}>
+                      <option value="">Sin asignar</option>
+                      {vendedores.map(v => (
+                        <option key={v.id} value={v.id}>{v.nombre || v.email} {v.rol === "admin" ? "(admin)" : ""}</option>
                       ))}
                     </select>
                   </div>
                 )}
+
+                {!isAdmin && (
+                  <div style={{ marginBottom: 20, background: "#1a1a1a", borderRadius: 8, padding: 14 }}>
+                    <div style={{ fontSize: 10, color: "#555", letterSpacing: 1, marginBottom: 4 }}>ASIGNADO A</div>
+                    <div style={{ fontSize: 13, color: "#e0e0e0" }}>{getNombreVendedor(lead.asignado_a)}</div>
+                  </div>
+                )}
+
                 <div style={{ marginBottom: 20 }}>
                   <div style={{ fontSize: 10, color: "#555", letterSpacing: 1, marginBottom: 8 }}>MOVER A ETAPA</div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -442,6 +397,7 @@ export default function CRM({ currentUser } = {}) {
                     ))}
                   </div>
                 </div>
+
                 <div style={{ marginBottom: 20 }}>
                   <div style={{ fontSize: 10, color: "#555", letterSpacing: 1, marginBottom: 8 }}>NOTAS</div>
                   <textarea className="input" style={{ fontSize: 12, lineHeight: 1.5 }}
@@ -450,6 +406,7 @@ export default function CRM({ currentUser } = {}) {
                     placeholder="Agrega notas sobre este lead..."
                   />
                 </div>
+
                 {WA_TEMPLATES[lead.stage] && (
                   <div style={{ marginBottom: 20, background: "#0d1e12", border: "1px solid #25D36644", borderRadius: 8, padding: 14 }}>
                     <div style={{ fontSize: 10, color: "#25D366", letterSpacing: 1, marginBottom: 8 }}>MENSAJE SUGERIDO PARA WHATSAPP</div>
@@ -462,18 +419,19 @@ export default function CRM({ currentUser } = {}) {
                   </div>
                 )}
               </div>
-              <div style={{ padding: "16px 24px", borderTop: "1px solid #222", display: "flex", justifyContent: isAdmin ? "space-between" : "flex-end", gap: 12 }}>
+              <div style={{ padding: "16px 24px", borderTop: "1px solid #222", display: "flex", justifyContent: "space-between" }}>
                 {isAdmin && (
                   <button className="btn" style={{ background: "#2a0d0d", color: "#E85D38", border: "1px solid #E85D3844", padding: "8px 16px", fontSize: 12 }}
                     onClick={() => deleteLead(lead.id)}>Eliminar lead</button>
                 )}
-                <button className="btn btn-primary" onClick={() => setSelectedLead(null)}>Guardar y cerrar</button>
+                <button className="btn btn-primary" style={{ marginLeft: "auto" }} onClick={() => setSelectedLead(null)}>Guardar y cerrar</button>
               </div>
             </div>
           </div>
         );
       })()}
 
+      {/* MODAL NUEVO LEAD */}
       {showForm && (
         <div className="modal-overlay" onClick={() => setShowForm(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -499,20 +457,12 @@ export default function CRM({ currentUser } = {}) {
                   </select>
                 </div>
                 <div>
-                  <div style={{ fontSize: 10, color: "#555", letterSpacing: 1.5, marginBottom: 6 }}>VENDEDOR ASIGNADO</div>
-                  <select
-                    className="select"
-                    value={newLead.vendedor}
-                    onChange={e => setNewLead(p => ({ ...p, vendedor: e.target.value }))}
-                    disabled={!isAdmin}
-                  >
-                    {vendedoresParaAsignar.map(v => <option key={v}>{v}</option>)}
+                  <div style={{ fontSize: 10, color: "#555", letterSpacing: 1.5, marginBottom: 6 }}>ASIGNAR A VENDEDOR</div>
+                  <select className="select" value={newLead.asignado_a} onChange={e => setNewLead(p => ({ ...p, asignado_a: e.target.value }))}>
+                    {vendedores.map(v => (
+                      <option key={v.id} value={v.id}>{v.nombre || v.email} {v.rol === "admin" ? "(admin)" : ""}</option>
+                    ))}
                   </select>
-                  {!isAdmin && (
-                    <div style={{ marginTop: 6, fontSize: 10, color: "#555" }}>
-                      Solo puedes crear leads asignados a ti.
-                    </div>
-                  )}
                 </div>
                 <div>
                   <div style={{ fontSize: 10, color: "#555", letterSpacing: 1.5, marginBottom: 6 }}>NOTAS INICIALES</div>
