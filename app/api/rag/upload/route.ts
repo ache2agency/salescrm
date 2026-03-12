@@ -70,10 +70,22 @@ export async function POST(request: Request) {
     }
 
     const supabase = await createClient()
-    const rows = chunks.map((chunk, idx) => ({
-      contenido: chunk,
-      embedding: vectors[idx],
-    }))
+    const rows = chunks.map((chunk, idx) => {
+      const embedding = vectors[idx]
+      console.log(
+        'RAG upload - chunk index:',
+        idx,
+        'embedding length:',
+        embedding?.length,
+        'sample:',
+        Array.isArray(embedding) ? embedding.slice(0, 3) : embedding
+      )
+      return {
+        contenido: chunk,
+        // Convertimos el embedding a string en formato vector de PostgreSQL
+        embedding: Array.isArray(embedding) ? `[${embedding.join(',')}]` : null,
+      }
+    })
 
     const { error: insertError } = await supabase.from('documentos').insert(rows)
     if (insertError) {
