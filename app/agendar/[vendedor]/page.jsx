@@ -135,6 +135,20 @@ export default function AgendarPage() {
         lead: leadData,
         cita: citaData,
       });
+
+      try {
+        await fetch("/api/emails/sequence", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            lead_id: leadData.id,
+            email: leadData.email,
+            nombre: leadData.nombre,
+          }),
+        });
+      } catch (_) {
+        // Secuencia opcional; no bloquear confirmación
+      }
     } finally {
       setSubmitting(false);
     }
