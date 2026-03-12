@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { contenido, titulo } = body as { contenido?: string; titulo?: string }
+    const { contenido } = body as { contenido?: string }
 
     if (!contenido || !contenido.trim()) {
       return NextResponse.json(
@@ -71,7 +71,6 @@ export async function POST(request: Request) {
 
     const supabase = await createClient()
     const rows = chunks.map((chunk, idx) => ({
-      titulo: titulo || null,
       contenido: chunk,
       embedding: vectors[idx],
     }))
