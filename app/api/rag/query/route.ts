@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServiceRoleClient } from '@/utils/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 
 export async function POST(req: Request) {
   const { question } = await req.json()
@@ -19,8 +19,13 @@ export async function POST(req: Request) {
 
   const embeddingStr = `[${embedding.join(',')}]`
 
-  // Buscar documentos similares
-  const supabase = createServiceRoleClient()
+  console.log('embeddingStr preview:', embeddingStr.slice(0, 50))
+
+  // Buscar documentos similares con cliente de service role
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
   const { data: matches, error } = await supabase.rpc('match_documents', {
     query_embedding: embeddingStr,
     match_count: 3
