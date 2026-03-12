@@ -54,11 +54,11 @@ export async function POST(request: Request) {
 
     // 2) Buscar documentos similares en Supabase
     const supabase = await createClient()
-    const { data: matches, error: matchError } = await supabase
-      .rpc('match_documents', {
-        query_embedding: queryEmbedding,
-        match_count: 3,
-      })
+    const { data: matches, error: matchError } = await supabase.rpc('match_documents', {
+      // Pasamos el embedding como string en formato vector de PostgreSQL
+      query_embedding: `[${queryEmbedding.join(',')}]`,
+      match_count: 3,
+    })
 
     if (matchError) {
       return NextResponse.json(
