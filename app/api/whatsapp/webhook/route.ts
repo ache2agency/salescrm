@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 
 function buildTwiml(message: string) {
@@ -22,7 +21,8 @@ export async function POST(request: Request) {
     const waId = (formData.get('WaId') as string | null) ?? ''
     const profileName = (formData.get('ProfileName') as string | null) ?? ''
 
-    const text = body.trim().toLowerCase()
+    const originalText = body.trim()
+    const text = originalText.toLowerCase()
     const waNumber = waId || from || ''
 
     // Crear lead automáticamente en Supabase con el número de WhatsApp
@@ -77,6 +77,35 @@ export async function POST(request: Request) {
       return buildTwiml(
         '¡Perfecto! Agenda tu clase de prueba gratuita aquí: https://salescrm-three.vercel.app/agendar/hola@windsor.edu.mx'
       )
+    }
+
+    // Detectar si es una pregunta o algo sobre Windsor para usar RAG
+    const looksLikeQuestion =
+      text.includes('windsor') ||
+      text.includes('instituto') ||
+      text.includes('?') ||
+      originalText.length > 40
+
+    if (looksLikeQuestion) {
+      try {
+        const url = new URL(request.url)
+        const ragUrl = new URL('/api/rag/query', url.origin)
+        const ragRes = await fetch(ragUrl.toString(), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question: originalText }),
+        })
+
+        if (ragRes.ok) {
+          const data = await ragRes.json()
+          const answer: string =
+            (data && typeof data.answer === 'string' && data.answer) ||
+            'Por ahora no tengo información suficiente para responder eso sobre Instituto Windsor.'
+          return buildTwiml(answer)
+        }
+      } catch {
+        // Si falla el RAG, caemos al mensaje genérico
+      }
     }
 
     // Cualquier mensaje inicial (incluye "hola") recibe este mensaje
