@@ -1,4 +1,5 @@
 import { createServerClient } from '@supabase/ssr'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 
 export async function createClient() {
@@ -21,4 +22,18 @@ export async function createClient() {
       },
     }
   )
+}
+
+// Cliente con service role para tareas de backend (ej. RAG) que necesitan ignorar RLS.
+// IMPORTANTE: Usa una env privada como SUPABASE_SERVICE_ROLE_KEY; no expongas esta key en el frontend.
+export function createServiceRoleClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const serviceRoleKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY
+
+  if (!serviceRoleKey) {
+    throw new Error('Falta SUPABASE_SERVICE_ROLE_KEY (o NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY) en el entorno')
+  }
+
+  return createSupabaseClient(url, serviceRoleKey)
 }

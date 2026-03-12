@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/utils/supabase/server'
+import { createServiceRoleClient } from '@/utils/supabase/server'
 
 export async function POST(req: Request) {
   const { question } = await req.json()
@@ -20,11 +20,16 @@ export async function POST(req: Request) {
   const embeddingStr = `[${embedding.join(',')}]`
 
   // Buscar documentos similares
-  const supabase = await createClient()
+  const supabase = createServiceRoleClient()
   const { data: matches, error } = await supabase.rpc('match_documents', {
     query_embedding: embeddingStr,
     match_count: 3
   })
+
+  if (error) {
+    console.error('RPC error:', error)
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
 
   console.log('matches:', JSON.stringify(matches), 'error:', JSON.stringify(error))
 
