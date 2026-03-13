@@ -1,7 +1,11 @@
-import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { NextResponse } from 'next/server'
 
 export async function POST(req: Request) {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
   const { question } = await req.json()
   if (!question) return NextResponse.json({ error: 'El campo question es obligatorio' }, { status: 400 })
 
@@ -17,17 +21,9 @@ export async function POST(req: Request) {
   const embedding = embData.data?.[0]?.embedding
   if (!embedding) return NextResponse.json({ error: 'Error generando embedding' }, { status: 500 })
 
-  const embeddingStr = `[${embedding.join(',')}]`
-
-  console.log('embeddingStr preview:', embeddingStr.slice(0, 50))
-
   // Buscar documentos similares con cliente de service role
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
   const { data: matches, error } = await supabase.rpc('match_documents', {
-    query_embedding: embeddingStr,
+    query_embedding: embedding,
     match_count: 3
   })
 

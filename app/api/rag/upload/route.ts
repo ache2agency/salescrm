@@ -1,5 +1,9 @@
+import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
-import { createClient } from '@/utils/supabase/server'
+
+export const maxDuration = 60
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const pdfParse = require('pdf-parse')
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY
 
@@ -15,29 +19,35 @@ function splitIntoChunks(text: string, wordsPerChunk = 500): string[] {
 export async function POST(request: Request) {
   try {
     if (!OPENAI_API_KEY) {
-      return NextResponse.json(
-        { error: 'Falta configurar OPENAI_API_KEY' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Falta configurar OPENAI_API_KEY' }, { status: 500 })
     }
 
-    const body = await request.json()
-    const { contenido } = body as { contenido?: string }
+    let contenido = ''
+    let titulo = ''
 
-    if (!contenido || !contenido.trim()) {
-      return NextResponse.json(
-        { error: 'El campo contenido es obligatorio' },
-        { status: 400 }
-      )
+    const contentType = request.headers.get('content-type') || ''
+
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await request.formData()
+      const file = formData.get('file') as File | null
+      if (!file) {
+        return NextResponse.json({ error: 'No se recibió ningún archivo' }, { status: 400 })
+      }
+      titulo = file.name
+      const buffer = Buffer.from(await file.arrayBuffer())
+      const parsed = await pdfParse(buffer)
+      contenido = parsed.text
+    } else {
+      const body = await request.json()
+      contenido = body.contenido || ''
+      titulo = body.titulo || ''
+    }
+
+    if (!contenido.trim()) {
+      return NextResponse.json({ error: 'El contenido está vacío' }, { status: 400 })
     }
 
     const chunks = splitIntoChunks(contenido.trim(), 500)
-    if (chunks.length === 0) {
-      return NextResponse.json(
-        { error: 'No se pudo generar contenido para indexar' },
-        { status: 400 }
-      )
-    }
 
     const embeddingRes = await fetch('https://api.openai.com/v1/embeddings', {
       method: 'POST',
@@ -45,65 +55,35 @@ export async function POST(request: Request) {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${OPENAI_API_KEY}`,
       },
-      body: JSON.stringify({
-        model: 'text-embedding-ada-002',
-        input: chunks,
-      }),
+      body: JSON.stringify({ model: 'text-embedding-ada-002', input: chunks }),
     })
 
     if (!embeddingRes.ok) {
       const detail = await embeddingRes.text()
-      return NextResponse.json(
-        { error: 'Error generando embeddings', detail },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Error generando embeddings', detail }, { status: 500 })
     }
 
     const embeddingData = await embeddingRes.json()
     const vectors: number[][] = embeddingData.data?.map((d: any) => d.embedding) || []
 
-    if (vectors.length !== chunks.length) {
-      return NextResponse.json(
-        { error: 'Cantidad de embeddings no coincide con los chunks' },
-        { status: 500 }
-      )
-    }
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
 
-    const supabase = await createClient()
-    const rows = chunks.map((chunk, idx) => {
-      const embedding = vectors[idx]
-      console.log(
-        'RAG upload - chunk index:',
-        idx,
-        'embedding length:',
-        embedding?.length,
-        'sample:',
-        Array.isArray(embedding) ? embedding.slice(0, 3) : embedding
-      )
-      return {
-        contenido: chunk,
-        // Convertimos el embedding a string en formato vector de PostgreSQL
-        embedding: Array.isArray(embedding) ? `[${embedding.join(',')}]` : null,
-      }
-    })
+    const rows = chunks.map((chunk, idx) => ({
+      titulo: titulo || null,
+      contenido: chunk,
+      embedding: vectors[idx],
+    }))
 
     const { error: insertError } = await supabase.from('documentos').insert(rows)
     if (insertError) {
-      return NextResponse.json(
-        { error: 'Error guardando documentos en Supabase', detail: insertError.message },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: 'Error guardando documentos', detail: insertError.message }, { status: 500 })
     }
 
-    return NextResponse.json({
-      ok: true,
-      chunks_indexed: chunks.length,
-    })
+    return NextResponse.json({ ok: true, chunks_indexed: chunks.length, titulo })
   } catch (e) {
-    return NextResponse.json(
-      { error: 'Error procesando carga de RAG', detail: String(e) },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Error procesando carga', detail: String(e) }, { status: 500 })
   }
 }
-

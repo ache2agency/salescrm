@@ -56,10 +56,45 @@ export default function CRM() {
     duracion: 30,
     notas: "",
   });
+  const [documentos, setDocumentos] = useState([]);
+  const [ragUploading, setRagUploading] = useState(false);
+  const [ragTexto, setRagTexto] = useState("");
+  const [ragTitulo, setRagTitulo] = useState("");
 
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3000);
+  };
+
+  const loadDocumentos = async () => {
+    const { data } = await supabase.from("documentos").select("id, titulo, contenido, created_at").order("created_at", { ascending: false });
+    setDocumentos(data || []);
+  };
+
+  const uploadTexto = async () => {
+    if (!ragTexto.trim()) return;
+    setRagUploading(true);
+    const res = await fetch("/api/rag/upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contenido: ragTexto, titulo: ragTitulo }),
+    });
+    const data = await res.json();
+    setRagUploading(false);
+    if (data.ok) {
+      showToast(`Indexado: ${data.chunks_indexed} fragmentos`);
+      setRagTexto("");
+      setRagTitulo("");
+      loadDocumentos();
+    } else {
+      showToast(data.error || "Error al indexar", "error");
+    }
+  };
+
+  const deleteDocumento = async (id) => {
+    await supabase.from("documentos").delete().eq("id", id);
+    setDocumentos((prev) => prev.filter((d) => d.id !== id));
+    showToast("Documento eliminado");
   };
 
   const isAdmin = currentProfile?.rol === "admin";
@@ -348,6 +383,7 @@ export default function CRM() {
             <button className={`nav-btn ${view === "kanban" ? "active" : ""}`} onClick={() => setView("kanban")}>KANBAN</button>
             <button className={`nav-btn ${view === "lista" ? "active" : ""}`} onClick={() => setView("lista")}>LISTA</button>
             <button className={`nav-btn ${view === "agenda" ? "active" : ""}`} onClick={() => setView("agenda")}>AGENDA</button>
+            {isAdmin && <button className={`nav-btn ${view === "base" ? "active" : ""}`} onClick={() => { setView("base"); loadDocumentos(); }}>BASE</button>}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <span style={{ fontSize: 11, color: "#555" }}>{currentProfile?.email || currentUser?.email}</span>
@@ -475,6 +511,63 @@ export default function CRM() {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* BASE DE CONOCIMIENTO */}
+        {view === "base" && isAdmin && (
+          <div style={{ background: "#161616", border: "1px solid #2a2a2a", borderRadius: 10, padding: 24 }}>
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 12, color: "#e0e0e0", marginBottom: 4 }}>BASE DE CONOCIMIENTO</div>
+              <div style={{ fontSize: 11, color: "#777" }}>Sube PDFs para que el bot de WhatsApp pueda responder preguntas</div>
+            </div>
+
+            {/* Upload */}
+            <div style={{ marginBottom: 20, display: "flex", flexDirection: "column", gap: 8 }}>
+              <input
+                type="text"
+                placeholder="Título del documento (ej: Cursos Windsor)"
+                value={ragTitulo}
+                onChange={(e) => setRagTitulo(e.target.value)}
+                style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 6, padding: "8px 12px", color: "#e0e0e0", fontSize: 12 }}
+              />
+              <textarea
+                placeholder="Pega aquí el texto del documento..."
+                value={ragTexto}
+                onChange={(e) => setRagTexto(e.target.value)}
+                rows={8}
+                style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 6, padding: "8px 12px", color: "#e0e0e0", fontSize: 12, resize: "vertical", fontFamily: "inherit" }}
+              />
+              <button
+                className="btn btn-primary"
+                onClick={uploadTexto}
+                disabled={ragUploading || !ragTexto.trim()}
+              >
+                {ragUploading ? "Indexando..." : "Indexar texto"}
+              </button>
+            </div>
+
+            {/* Lista de documentos */}
+            {documentos.length === 0 ? (
+              <div style={{ padding: 20, borderRadius: 8, border: "1px dashed #333", textAlign: "center", color: "#555", fontSize: 12 }}>
+                No hay documentos indexados todavía.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {documentos.map((doc) => (
+                  <div key={doc.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", borderRadius: 8, border: "1px solid #2a2a2a", fontSize: 12 }}>
+                    <div>
+                      <div style={{ color: "#e0e0e0", marginBottom: 2 }}>{doc.titulo || "Sin título"}</div>
+                      <div style={{ color: "#555", fontSize: 11 }}>{doc.contenido?.slice(0, 80)}...</div>
+                    </div>
+                    <button
+                      onClick={() => deleteDocumento(doc.id)}
+                      style={{ background: "none", border: "none", color: "#E85D38", cursor: "pointer", fontSize: 18, lineHeight: 1 }}
+                    >×</button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
