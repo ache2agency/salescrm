@@ -49,6 +49,10 @@ export async function POST(request: Request) {
 
     const chunks = splitIntoChunks(contenido.trim(), 500)
 
+    // Timeout de seguridad para evitar que la petición a OpenAI se quede colgada
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 120000) // 2 minutos
+
     const embeddingRes = await fetch('https://api.openai.com/v1/embeddings', {
       method: 'POST',
       headers: {
@@ -56,7 +60,15 @@ export async function POST(request: Request) {
         Authorization: `Bearer ${OPENAI_API_KEY}`,
       },
       body: JSON.stringify({ model: 'text-embedding-ada-002', input: chunks }),
+      signal: controller.signal,
+    }).catch((e: any) => {
+      if (e?.name === 'AbortError') {
+        throw new Error('Timeout llamando a OpenAI embeddings (upload)')
+      }
+      throw e
     })
+
+    clearTimeout(timeout)
 
     if (!embeddingRes.ok) {
       const detail = await embeddingRes.text()

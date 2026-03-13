@@ -63,6 +63,9 @@ export default function CRM() {
   const [expandedDoc, setExpandedDoc] = useState(null);
   const [editingDoc, setEditingDoc] = useState(null);
   const [editTexto, setEditTexto] = useState("");
+  const [whatsConvs, setWhatsConvs] = useState([]);
+  const [selectedConv, setSelectedConv] = useState(null);
+  const [convMessages, setConvMessages] = useState([]);
   const [editTitulo, setEditTitulo] = useState("");
 
   const showToast = (msg, type = "success") => {
@@ -78,20 +81,42 @@ export default function CRM() {
   const uploadTexto = async () => {
     if (!ragTexto.trim()) return;
     setRagUploading(true);
-    const res = await fetch("/api/rag/upload", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contenido: ragTexto, titulo: ragTitulo }),
-    });
-    const data = await res.json();
-    setRagUploading(false);
-    if (data.ok) {
-      showToast(`Indexado: ${data.chunks_indexed} fragmentos`);
-      setRagTexto("");
-      setRagTitulo("");
-      loadDocumentos();
-    } else {
-      showToast(data.error || "Error al indexar", "error");
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 120000); // 2 min
+
+      const res = await fetch("/api/rag/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({ contenido: ragTexto, titulo: ragTitulo }),
+      });
+
+      clearTimeout(timeout);
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        showToast(data?.error || "Error al indexar (HTTP " + res.status + ")", "error");
+        return;
+      }
+
+      if (data.ok) {
+        showToast(`Indexado: ${data.chunks_indexed} fragmentos`);
+        setRagTexto("");
+        setRagTitulo("");
+        loadDocumentos();
+      } else {
+        showToast(data.error || "Error al indexar", "error");
+      }
+    } catch (e) {
+      const msg =
+        e?.name === "AbortError"
+          ? "Indexación tardó demasiado (timeout). Intenta con menos texto."
+          : "Error de red indexando. Reintenta."
+      showToast(msg, "error");
+    } finally {
+      setRagUploading(false);
     }
   };
 
@@ -102,19 +127,40 @@ export default function CRM() {
   };
 
   const saveDocumento = async (id) => {
-    const res = await fetch("/api/rag/upload", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contenido: editTexto, titulo: editTitulo }),
-    });
-    const data = await res.json();
-    if (data.ok) {
-      await supabase.from("documentos").delete().eq("id", id);
-      setEditingDoc(null);
-      showToast("Documento actualizado");
-      loadDocumentos();
-    } else {
-      showToast(data.error || "Error al guardar", "error");
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 120000); // 2 min
+
+      const res = await fetch("/api/rag/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({ contenido: editTexto, titulo: editTitulo }),
+      });
+
+      clearTimeout(timeout);
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        showToast(data?.error || "Error al guardar (HTTP " + res.status + ")", "error");
+        return;
+      }
+
+      if (data.ok) {
+        await supabase.from("documentos").delete().eq("id", id);
+        setEditingDoc(null);
+        showToast("Documento actualizado");
+        loadDocumentos();
+      } else {
+        showToast(data.error || "Error al guardar", "error");
+      }
+    } catch (e) {
+      const msg =
+        e?.name === "AbortError"
+          ? "Guardado tardó demasiado (timeout). Intenta con menos texto."
+          : "Error de red guardando. Reintenta."
+      showToast(msg, "error");
     }
   };
 
@@ -179,6 +225,32 @@ export default function CRM() {
       showToast("Error cargando citas", "error");
     } else {
       setCitas(data || []);
+    }
+  };
+
+  const fetchWhatsConvs = async () => {
+    const { data, error } = await supabase
+      .from("whatsapp_conversaciones")
+      .select("id, whatsapp, lead_id, estado, ultimo_mensaje_at")
+      .order("ultimo_mensaje_at", { ascending: false });
+    if (error) {
+      showToast("Error cargando conversaciones de WhatsApp", "error");
+    } else {
+      setWhatsConvs(data || []);
+    }
+  };
+
+  const fetchConvMessages = async (convId) => {
+    setConvMessages([]);
+    const { data, error } = await supabase
+      .from("whatsapp_mensajes")
+      .select("id, rol, contenido, created_at")
+      .eq("conversacion_id", convId)
+      .order("created_at", { ascending: true });
+    if (error) {
+      showToast("Error cargando mensajes de WhatsApp", "error");
+    } else {
+      setConvMessages(data || []);
     }
   };
 
@@ -404,7 +476,30 @@ export default function CRM() {
             <button className={`nav-btn ${view === "kanban" ? "active" : ""}`} onClick={() => setView("kanban")}>KANBAN</button>
             <button className={`nav-btn ${view === "lista" ? "active" : ""}`} onClick={() => setView("lista")}>LISTA</button>
             <button className={`nav-btn ${view === "agenda" ? "active" : ""}`} onClick={() => setView("agenda")}>AGENDA</button>
-            {isAdmin && <button className={`nav-btn ${view === "base" ? "active" : ""}`} onClick={() => { setView("base"); loadDocumentos(); }}>BASE</button>}
+            {isAdmin && (
+              <>
+                <button
+                  className={`nav-btn ${view === "convs" ? "active" : ""}`}
+                  onClick={() => {
+                    setView("convs");
+                    fetchWhatsConvs();
+                    setSelectedConv(null);
+                    setConvMessages([]);
+                  }}
+                >
+                  CONVERSACIONES
+                </button>
+                <button
+                  className={`nav-btn ${view === "base" ? "active" : ""}`}
+                  onClick={() => {
+                    setView("base");
+                    loadDocumentos();
+                  }}
+                >
+                  BASE
+                </button>
+              </>
+            )}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <span style={{ fontSize: 11, color: "#555" }}>{currentProfile?.email || currentUser?.email}</span>
@@ -626,6 +721,108 @@ export default function CRM() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* CONVERSACIONES WHATSAPP */}
+        {view === "convs" && isAdmin && (
+          <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1.4fr", gap: 18 }}>
+            {/* Lista de conversaciones */}
+            <div style={{ background: "#161616", border: "1px solid #2a2a2a", borderRadius: 10, padding: 16 }}>
+              <div style={{ fontSize: 12, color: "#e0e0e0", marginBottom: 4 }}>CONVERSACIONES WHATSAPP</div>
+              <div style={{ fontSize: 11, color: "#777", marginBottom: 12 }}>
+                Últimos chats que han llegado por WhatsApp.
+              </div>
+              {whatsConvs.length === 0 ? (
+                <div style={{ padding: 20, borderRadius: 8, border: "1px dashed #333", textAlign: "center", color: "#555", fontSize: 12 }}>
+                  No hay conversaciones registradas todavía.
+                </div>
+              ) : (
+                <div style={{ maxHeight: 420, overflowY: "auto" }}>
+                  {whatsConvs.map((c) => (
+                    <div
+                      key={c.id}
+                      onClick={async () => {
+                        setSelectedConv(c);
+                        await fetchConvMessages(c.id);
+                      }}
+                      style={{
+                        padding: "8px 10px",
+                        borderRadius: 8,
+                        border: "1px solid #2a2a2a",
+                        marginBottom: 8,
+                        cursor: "pointer",
+                        background: selectedConv?.id === c.id ? "#222" : "#161616",
+                      }}
+                    >
+                      <div style={{ fontSize: 12, color: "#e0e0e0" }}>{c.whatsapp}</div>
+                      <div style={{ fontSize: 11, color: "#777", marginTop: 2 }}>
+                        {c.estado} · {c.ultimo_mensaje_at?.slice(0, 16) ?? ""}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Detalle de conversación */}
+            <div style={{ background: "#161616", border: "1px solid #2a2a2a", borderRadius: 10, padding: 16, minHeight: 260 }}>
+              {!selectedConv ? (
+                <div style={{ fontSize: 12, color: "#555" }}>
+                  Selecciona una conversación para ver el historial.
+                </div>
+              ) : (
+                <>
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 12, color: "#e0e0e0" }}>Chat con</div>
+                    <div style={{ fontSize: 13, color: "#E8A838" }}>{selectedConv.whatsapp}</div>
+                    <div style={{ fontSize: 11, color: "#777", marginTop: 2 }}>
+                      Estado: {selectedConv.estado}
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      borderRadius: 8,
+                      border: "1px solid #2a2a2a",
+                      padding: 10,
+                      maxHeight: 420,
+                      overflowY: "auto",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 6,
+                      fontSize: 12,
+                    }}
+                  >
+                    {convMessages.length === 0 ? (
+                      <div style={{ fontSize: 12, color: "#555" }}>
+                        No hay mensajes registrados en esta conversación.
+                      </div>
+                    ) : (
+                      convMessages.map((m) => (
+                        <div
+                          key={m.id}
+                          style={{
+                            alignSelf: m.rol === "usuario" ? "flex-start" : "flex-end",
+                            maxWidth: "80%",
+                            background: m.rol === "usuario" ? "#1f1f1f" : "#E8A838",
+                            color: m.rol === "usuario" ? "#e0e0e0" : "#0e0e0e",
+                            borderRadius: 8,
+                            padding: "6px 8px",
+                            lineHeight: 1.4,
+                            border: m.rol === "usuario" ? "1px solid #333" : "none",
+                          }}
+                        >
+                          <div>{m.contenido}</div>
+                          <div style={{ fontSize: 10, marginTop: 3, opacity: 0.7 }}>
+                            {m.created_at?.slice(0, 16) ?? ""}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         )}
 

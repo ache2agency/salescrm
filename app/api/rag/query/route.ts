@@ -12,11 +12,21 @@ export async function POST(req: Request) {
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY
 
   // Generar embedding de la pregunta
+  const embController = new AbortController()
+  const embTimeout = setTimeout(() => embController.abort(), 60000) // 60s
+
   const embRes = await fetch('https://api.openai.com/v1/embeddings', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${OPENAI_API_KEY}` },
-    body: JSON.stringify({ model: 'text-embedding-ada-002', input: question })
+    body: JSON.stringify({ model: 'text-embedding-ada-002', input: question }),
+    signal: embController.signal,
+  }).catch((e: any) => {
+    if (e?.name === 'AbortError') {
+      throw new Error('Timeout llamando a OpenAI embeddings (query)')
+    }
+    throw e
   })
+  clearTimeout(embTimeout)
   const embData = await embRes.json()
   const embedding = embData.data?.[0]?.embedding
   if (!embedding) return NextResponse.json({ error: 'Error generando embedding' }, { status: 500 })
@@ -41,6 +51,9 @@ export async function POST(req: Request) {
   const context = matches.map((m: any) => m.contenido).join('\n\n')
 
   // Responder con GPT
+  const chatController = new AbortController()
+  const chatTimeout = setTimeout(() => chatController.abort(), 60000) // 60s
+
   const chatRes = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${OPENAI_API_KEY}` },
@@ -50,8 +63,15 @@ export async function POST(req: Request) {
         { role: 'system', content: `Eres el asistente de Instituto Windsor. Responde basándote en este contexto:\n\n${context}` },
         { role: 'user', content: question }
       ]
-    })
+    }),
+    signal: chatController.signal,
+  }).catch((e: any) => {
+    if (e?.name === 'AbortError') {
+      throw new Error('Timeout llamando a OpenAI chat (query)')
+    }
+    throw e
   })
+  clearTimeout(chatTimeout)
   const chatData = await chatRes.json()
   const answer = chatData.choices?.[0]?.message?.content || 'Sin respuesta'
 
