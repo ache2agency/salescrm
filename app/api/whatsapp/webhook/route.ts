@@ -79,38 +79,29 @@ export async function POST(request: Request) {
       )
     }
 
-    // Detectar si es una pregunta o algo sobre Windsor para usar RAG
-    const looksLikeQuestion =
-      text.includes('windsor') ||
-      text.includes('instituto') ||
-      text.includes('?') ||
-      originalText.length > 40
+    // Todos los mensajes pasan por RAG + GPT-4o
+    try {
+      const url = new URL(request.url)
+      const ragUrl = new URL('/api/rag/query', url.origin)
+      const ragRes = await fetch(ragUrl.toString(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: originalText }),
+      })
 
-    if (looksLikeQuestion) {
-      try {
-        const url = new URL(request.url)
-        const ragUrl = new URL('/api/rag/query', url.origin)
-        const ragRes = await fetch(ragUrl.toString(), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ question: originalText }),
-        })
-
-        if (ragRes.ok) {
-          const data = await ragRes.json()
-          const answer: string =
-            (data && typeof data.answer === 'string' && data.answer) ||
-            'Por ahora no tengo información suficiente para responder eso sobre Instituto Windsor.'
-          return buildTwiml(answer)
-        }
-      } catch {
-        // Si falla el RAG, caemos al mensaje genérico
+      if (ragRes.ok) {
+        const data = await ragRes.json()
+        const answer: string =
+          (data && typeof data.answer === 'string' && data.answer) ||
+          '¡Hola! 👋 Soy el asistente de Instituto Windsor. ¿En qué puedo ayudarte?'
+        return buildTwiml(answer)
       }
+    } catch {
+      // Si falla el RAG, respondemos con mensaje genérico
     }
 
-    // Cualquier mensaje inicial (incluye "hola") recibe este mensaje
     return buildTwiml(
-      '¡Hola! 👋 Soy el asistente de Instituto Windsor. ¿Te interesa conocer nuestros programas educativos? Responde SÍ para más información.'
+      '¡Hola! 👋 Soy el asistente de Instituto Windsor. ¿En qué puedo ayudarte?'
     )
   } catch (e) {
     // En caso de error, respondemos 200 vacío para que Twilio no reintente indefinidamente
