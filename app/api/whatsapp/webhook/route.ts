@@ -1,4 +1,4 @@
-import { createClient } from '@/utils/supabase/server'
+import { createServiceRoleClient } from '@/utils/supabase/server'
 
 function buildTwiml(message: string) {
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     // Crear lead y conversación automáticamente en Supabase con el número de WhatsApp
     if (waNumber) {
       try {
-        const supabase = await createClient()
+        const supabase = createServiceRoleClient()
 
         // Normalizamos el número como lo recibimos, sin transformarlo más
         const whatsappValue = waNumber
@@ -132,7 +132,7 @@ export async function POST(request: Request) {
 
       // Intentar guardar respuesta del bot en la conversación (best-effort)
       try {
-        const supabase = await createClient()
+        const supabase = createServiceRoleClient()
         const whatsappValue = waNumber
         const { data: conv } = await supabase
           .from('whatsapp_conversaciones')
@@ -186,7 +186,7 @@ export async function POST(request: Request) {
 
     // Guardar respuesta del bot en la conversación (best-effort)
     try {
-      const supabase = await createClient()
+      const supabase = createServiceRoleClient()
       const whatsappValue = waNumber
       const { data: conv } = await supabase
         .from('whatsapp_conversaciones')
