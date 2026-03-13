@@ -60,6 +60,10 @@ export default function CRM() {
   const [ragUploading, setRagUploading] = useState(false);
   const [ragTexto, setRagTexto] = useState("");
   const [ragTitulo, setRagTitulo] = useState("");
+  const [expandedDoc, setExpandedDoc] = useState(null);
+  const [editingDoc, setEditingDoc] = useState(null);
+  const [editTexto, setEditTexto] = useState("");
+  const [editTitulo, setEditTitulo] = useState("");
 
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
@@ -95,6 +99,23 @@ export default function CRM() {
     await supabase.from("documentos").delete().eq("id", id);
     setDocumentos((prev) => prev.filter((d) => d.id !== id));
     showToast("Documento eliminado");
+  };
+
+  const saveDocumento = async (id) => {
+    const res = await fetch("/api/rag/upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contenido: editTexto, titulo: editTitulo }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      await supabase.from("documentos").delete().eq("id", id);
+      setEditingDoc(null);
+      showToast("Documento actualizado");
+      loadDocumentos();
+    } else {
+      showToast(data.error || "Error al guardar", "error");
+    }
   };
 
   const isAdmin = currentProfile?.rol === "admin";
@@ -555,15 +576,52 @@ export default function CRM() {
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {documentos.map((doc) => (
-                  <div key={doc.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", borderRadius: 8, border: "1px solid #2a2a2a", fontSize: 12 }}>
-                    <div>
-                      <div style={{ color: "#e0e0e0", marginBottom: 2 }}>{doc.titulo || "Sin título"}</div>
-                      <div style={{ color: "#555", fontSize: 11 }}>{doc.contenido?.slice(0, 80)}...</div>
+                  <div key={doc.id} style={{ borderRadius: 8, border: "1px solid #2a2a2a", fontSize: 12, overflow: "hidden" }}>
+                    <div
+                      style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", cursor: "pointer" }}
+                      onClick={() => setExpandedDoc(expandedDoc === doc.id ? null : doc.id)}
+                    >
+                      <div>
+                        <div style={{ color: "#e0e0e0", marginBottom: 2 }}>{doc.titulo || "Sin título"}</div>
+                        <div style={{ color: "#555", fontSize: 11 }}>{doc.contenido?.slice(0, 80)}...</div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <span style={{ color: "#555", fontSize: 16 }}>{expandedDoc === doc.id ? "▲" : "▼"}</span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setEditingDoc(doc.id); setEditTitulo(doc.titulo || ""); setEditTexto(doc.contenido || ""); setExpandedDoc(doc.id); }}
+                          style={{ background: "none", border: "1px solid #444", borderRadius: 4, color: "#aaa", cursor: "pointer", fontSize: 11, padding: "2px 8px" }}
+                        >editar</button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); deleteDocumento(doc.id); }}
+                          style={{ background: "none", border: "none", color: "#E85D38", cursor: "pointer", fontSize: 18, lineHeight: 1 }}
+                        >×</button>
+                      </div>
                     </div>
-                    <button
-                      onClick={() => deleteDocumento(doc.id)}
-                      style={{ background: "none", border: "none", color: "#E85D38", cursor: "pointer", fontSize: 18, lineHeight: 1 }}
-                    >×</button>
+                    {expandedDoc === doc.id && (
+                      <div style={{ padding: "10px 14px", borderTop: "1px solid #2a2a2a" }}>
+                        {editingDoc === doc.id ? (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                            <input
+                              value={editTitulo}
+                              onChange={(e) => setEditTitulo(e.target.value)}
+                              style={{ background: "#1a1a1a", border: "1px solid #333", borderRadius: 6, padding: "6px 10px", color: "#e0e0e0", fontSize: 12 }}
+                            />
+                            <textarea
+                              value={editTexto}
+                              onChange={(e) => setEditTexto(e.target.value)}
+                              rows={10}
+                              style={{ background: "#1a1a1a", border: "1px solid #333", borderRadius: 6, padding: "6px 10px", color: "#e0e0e0", fontSize: 11, resize: "vertical", fontFamily: "inherit", lineHeight: 1.6 }}
+                            />
+                            <div style={{ display: "flex", gap: 8 }}>
+                              <button className="btn btn-primary" onClick={() => saveDocumento(doc.id)}>Guardar y re-indexar</button>
+                              <button className="btn" onClick={() => setEditingDoc(null)} style={{ background: "#1a1a1a", border: "1px solid #333", color: "#aaa", borderRadius: 6, padding: "6px 14px", fontSize: 12, cursor: "pointer" }}>Cancelar</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ color: "#aaa", fontSize: 11, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{doc.contenido}</div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
