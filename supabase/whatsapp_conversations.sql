@@ -10,13 +10,19 @@ create table if not exists public.whatsapp_conversaciones (
   created_at timestamptz default now()
 );
 
+-- Campos adicionales para orquestar el flujo y takeover humano
+alter table public.whatsapp_conversaciones
+  add column if not exists fase text not null default 'saludo', -- 'saludo' | 'datos' | 'info_programa' | 'seguimiento' | 'cerrado' | 'perdido' | 'otro'
+  add column if not exists modo_humano boolean not null default false,
+  add column if not exists tomado_por uuid references public.profiles(id);
+
 alter table public.whatsapp_conversaciones enable row level security;
 
 -- Mensajes dentro de una conversación
 create table if not exists public.whatsapp_mensajes (
   id uuid primary key default gen_random_uuid(),
   conversacion_id uuid not null references public.whatsapp_conversaciones(id) on delete cascade,
-  rol text not null,                -- 'usuario' | 'bot'
+  rol text not null,                -- 'usuario' | 'bot' | 'agente'
   contenido text not null,
   raw_payload jsonb,
   created_at timestamptz default now()
@@ -79,6 +85,41 @@ create policy "vendedor ve sus mensajes"
       join public.leads l on l.id = c.lead_id
       where c.id = whatsapp_mensajes.conversacion_id
         and (l.asignado_a = auth.uid() or public.es_admin())
+    )
+  );
+
+-- Vendedores pueden actualizar conversaciones de sus leads (Tomar control / Volver a BOT)
+create policy "vendedor actualiza sus conversaciones"
+  on public.whatsapp_conversaciones
+  for update
+  using (
+    exists (
+      select 1
+      from public.leads l
+      where l.id = whatsapp_conversaciones.lead_id
+        and l.asignado_a = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.leads l
+      where l.id = whatsapp_conversaciones.lead_id
+        and l.asignado_a = auth.uid()
+    )
+  );
+
+-- Vendedores pueden insertar mensajes como agente en conversaciones de sus leads
+create policy "vendedor inserta mensajes agente"
+  on public.whatsapp_mensajes
+  for insert
+  with check (
+    exists (
+      select 1
+      from public.whatsapp_conversaciones c
+      join public.leads l on l.id = c.lead_id
+      where c.id = whatsapp_mensajes.conversacion_id
+        and l.asignado_a = auth.uid()
     )
   );
 

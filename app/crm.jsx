@@ -67,6 +67,12 @@ export default function CRM() {
   const [selectedConv, setSelectedConv] = useState(null);
   const [convMessages, setConvMessages] = useState([]);
   const [editTitulo, setEditTitulo] = useState("");
+  const [flowRules, setFlowRules] = useState([]);
+  const [flowLoading, setFlowLoading] = useState(false);
+  const [flowSaving, setFlowSaving] = useState(false);
+  const [flowId, setFlowId] = useState(null);
+  const [agentMessage, setAgentMessage] = useState("");
+  const [sendingAgent, setSendingAgent] = useState(false);
 
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
@@ -229,15 +235,22 @@ export default function CRM() {
   };
 
   const fetchWhatsConvs = async () => {
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from("whatsapp_conversaciones")
-      .select("id, whatsapp, lead_id, estado, ultimo_mensaje_at")
+      .select("id, whatsapp, lead_id, estado, ultimo_mensaje_at, modo_humano, tomado_por, fase")
       .order("ultimo_mensaje_at", { ascending: false });
     if (error) {
-      showToast("Error cargando conversaciones de WhatsApp", "error");
-    } else {
-      setWhatsConvs(data || []);
+      const fallback = await supabase
+        .from("whatsapp_conversaciones")
+        .select("id, whatsapp, lead_id, estado, ultimo_mensaje_at")
+        .order("ultimo_mensaje_at", { ascending: false });
+      if (fallback.error) {
+        showToast("Error cargando conversaciones de WhatsApp", "error");
+        return;
+      }
+      data = fallback.data;
     }
+    setWhatsConvs(data || []);
   };
 
   const fetchConvMessages = async (convId) => {
@@ -251,6 +264,203 @@ export default function CRM() {
       showToast("Error cargando mensajes de WhatsApp", "error");
     } else {
       setConvMessages(data || []);
+    }
+  };
+
+  const loadWhatsappFlow = async () => {
+    setFlowLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("whatsapp_flows")
+        .select("id, config")
+        .eq("activo", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        showToast("Error cargando flow de WhatsApp", "error");
+        return;
+      }
+
+      setFlowId(data?.id || null);
+      const cfg = data?.config && typeof data.config === "object" ? data.config : { rules: [] };
+      const rules = Array.isArray(cfg.rules) ? cfg.rules : [];
+      if (rules.length) {
+        setFlowRules(
+          rules.map((r) => ({
+            match: r.match || "",
+            type: r.use_rag || r.type === "rag" ? "rag" : "fixed",
+            answer: r.answer || r.response || "",
+          }))
+        );
+      } else {
+        setFlowRules([
+          {
+            match: "hola",
+            type: "fixed",
+            answer:
+              "¡Hola! 👋 Soy el asistente de Instituto Windsor. ¿Te interesa conocer nuestros programas educativos? Responde SÍ para más información.",
+          },
+          {
+            match: "precio",
+            type: "rag",
+            answer: "",
+          },
+        ]);
+      }
+    } catch {
+      showToast("Error cargando flow de WhatsApp", "error");
+    } finally {
+      setFlowLoading(false);
+    }
+  };
+
+  const saveWhatsappFlow = async () => {
+    if (!isAdmin) return;
+
+    const cleanedRules = flowRules
+      .map((r) => ({
+        match: (r.match || "").trim().toLowerCase(),
+        type: r.type === "rag" ? "rag" : "fixed",
+        answer: (r.answer || "").trim(),
+      }))
+      .filter((r) => r.match);
+
+    if (!cleanedRules.length) {
+      showToast("Agrega al menos una regla con palabra clave", "error");
+      return;
+    }
+
+    const config = {
+      rules: cleanedRules.map((r) => ({
+        match: r.match,
+        answer: r.type === "fixed" ? r.answer : undefined,
+        use_rag: r.type === "rag",
+      })),
+    };
+
+    setFlowSaving(true);
+    try {
+      if (flowId) {
+        const { error } = await supabase
+          .from("whatsapp_flows")
+          .update({ config })
+          .eq("id", flowId);
+
+        if (error) {
+          showToast("Error guardando flow de WhatsApp", "error");
+        } else {
+          showToast("Flow de WhatsApp guardado");
+        }
+      } else {
+        const { data, error } = await supabase
+          .from("whatsapp_flows")
+          .insert([
+            {
+              nombre: "Flow principal WhatsApp",
+              descripcion: "Reglas básicas para el bot de WhatsApp",
+              activo: true,
+              config,
+            },
+          ])
+          .select("id")
+          .single();
+
+        if (error) {
+          showToast("Error guardando flow de WhatsApp", "error");
+        } else {
+          setFlowId(data?.id || null);
+          showToast("Flow de WhatsApp guardado");
+        }
+      }
+    } catch {
+      showToast("Error guardando flow de WhatsApp", "error");
+    } finally {
+      setFlowSaving(false);
+    }
+  };
+
+  const setHumanMode = async (conv, enabled) => {
+    if (!conv) return;
+    const { error } = await supabase
+      .from("whatsapp_conversaciones")
+      .update({
+        modo_humano: enabled,
+        tomado_por: enabled ? currentUser?.id || null : null,
+      })
+      .eq("id", conv.id);
+    if (error) {
+      showToast(error.message || "Error cambiando modo de conversación. ¿Ejecutaste el SQL de RLS en Supabase?", "error");
+      return;
+    }
+    setSelectedConv((prev) => (prev && prev.id === conv.id ? { ...prev, modo_humano: enabled, tomado_por: enabled ? currentUser?.id || null : null } : prev));
+    setWhatsConvs((prev) =>
+      prev.map((c) =>
+        c.id === conv.id ? { ...c, modo_humano: enabled, tomado_por: enabled ? currentUser?.id || null : null } : c
+      )
+    );
+    showToast(enabled ? "Ahora la conversación está en modo HUMANO" : "La conversación volvió al BOT");
+  };
+
+  const sendAgentReply = async () => {
+    if (!selectedConv || !agentMessage.trim()) return;
+    setSendingAgent(true);
+    try {
+      const res = await fetch("/api/whatsapp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: selectedConv.whatsapp, body: agentMessage }),
+      });
+      if (!res.ok) {
+        let errMsg = "Error enviando mensaje de WhatsApp";
+        try {
+          const data = await res.json();
+          if (data?.detail) errMsg = data.detail;
+          else if (data?.error) errMsg = data.error;
+        } catch (_) {}
+        showToast(errMsg, "error");
+        return;
+      }
+
+      const now = new Date().toISOString();
+      const msgToShow = { id: `local-${now}`, rol: "agente", contenido: agentMessage, created_at: now };
+
+      // Siempre mostrar el mensaje en el chat cuando Twilio acepta el envío
+      setConvMessages((prev) => [...prev, msgToShow]);
+      setSelectedConv((prev) =>
+        prev ? { ...prev, ultimo_mensaje_at: now, modo_humano: true, tomado_por: currentUser?.id || null } : prev
+      );
+      setWhatsConvs((prev) =>
+        prev.map((c) =>
+          c.id === selectedConv.id
+            ? { ...c, ultimo_mensaje_at: now, modo_humano: true, tomado_por: currentUser?.id || null }
+            : c
+        )
+      );
+      setAgentMessage("");
+      showToast("Mensaje enviado. Si no llega a WhatsApp, el número debe haber iniciado chat con el bot (sandbox).");
+
+      // Guardar en historial (no bloquea la UI)
+      const { error } = await supabase.from("whatsapp_mensajes").insert([
+        {
+          conversacion_id: selectedConv.id,
+          rol: "agente",
+          contenido: agentMessage,
+        },
+      ]);
+      if (error) {
+        showToast("No se pudo guardar en el historial", "error");
+      } else {
+        await supabase
+          .from("whatsapp_conversaciones")
+          .update({ ultimo_mensaje_at: now, modo_humano: true, tomado_por: currentUser?.id || null })
+          .eq("id", selectedConv.id);
+      }
+    } catch (e) {
+      showToast(e?.message || "Error enviando mensaje de WhatsApp", "error");
+    } finally {
+      setSendingAgent(false);
     }
   };
 
@@ -476,19 +686,19 @@ export default function CRM() {
             <button className={`nav-btn ${view === "kanban" ? "active" : ""}`} onClick={() => setView("kanban")}>KANBAN</button>
             <button className={`nav-btn ${view === "lista" ? "active" : ""}`} onClick={() => setView("lista")}>LISTA</button>
             <button className={`nav-btn ${view === "agenda" ? "active" : ""}`} onClick={() => setView("agenda")}>AGENDA</button>
+            <button
+              className={`nav-btn ${view === "convs" ? "active" : ""}`}
+              onClick={() => {
+                setView("convs");
+                fetchWhatsConvs();
+                setSelectedConv(null);
+                setConvMessages([]);
+              }}
+            >
+              CONVERSACIONES
+            </button>
             {isAdmin && (
               <>
-                <button
-                  className={`nav-btn ${view === "convs" ? "active" : ""}`}
-                  onClick={() => {
-                    setView("convs");
-                    fetchWhatsConvs();
-                    setSelectedConv(null);
-                    setConvMessages([]);
-                  }}
-                >
-                  CONVERSACIONES
-                </button>
                 <button
                   className={`nav-btn ${view === "base" ? "active" : ""}`}
                   onClick={() => {
@@ -497,6 +707,15 @@ export default function CRM() {
                   }}
                 >
                   BASE
+                </button>
+                <button
+                  className={`nav-btn ${view === "flows" ? "active" : ""}`}
+                  onClick={() => {
+                    setView("flows");
+                    loadWhatsappFlow();
+                  }}
+                >
+                  FLOWS
                 </button>
               </>
             )}
@@ -724,8 +943,175 @@ export default function CRM() {
           </div>
         )}
 
+        {/* FLOWS WHATSAPP */}
+        {view === "flows" && isAdmin && (
+          <div style={{ background: "#161616", border: "1px solid #2a2a2a", borderRadius: 10, padding: 24 }}>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 12, color: "#e0e0e0", marginBottom: 4 }}>FLOWS WHATSAPP</div>
+              <div style={{ fontSize: 11, color: "#777" }}>
+                Define reglas simples por palabra clave. El bot aplica la primera que coincida antes de usar RAG.
+              </div>
+            </div>
+            <div style={{ fontSize: 11, color: "#555", marginBottom: 8 }}>
+              Ejemplo: si el mensaje contiene <code>hola</code>, responde un texto fijo. Si contiene <code>precio</code>, usa la base RAG.
+            </div>
+            <div style={{ border: "1px solid #2a2a2a", borderRadius: 8, overflow: "hidden" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "2fr 1.2fr 3fr", background: "#111", fontSize: 11, color: "#777" }}>
+                <div style={{ padding: "8px 10px", borderRight: "1px solid #2a2a2a" }}>PALABRA CLAVE CONTIENE</div>
+                <div style={{ padding: "8px 10px", borderRight: "1px solid #2a2a2a" }}>ACCIÓN</div>
+                <div style={{ padding: "8px 10px" }}>RESPUESTA (si es texto fijo)</div>
+              </div>
+              {flowRules.length === 0 ? (
+                <div style={{ padding: 12, fontSize: 12, color: "#555" }}>
+                  No hay reglas aún. Agrega una con el botón de abajo.
+                </div>
+              ) : (
+                flowRules.map((rule, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "2fr 1.2fr 3fr",
+                      borderTop: "1px solid #2a2a2a",
+                      fontSize: 12,
+                    }}
+                  >
+                    <div style={{ padding: "8px 10px", borderRight: "1px solid #2a2a2a" }}>
+                      <input
+                        value={rule.match}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setFlowRules((prev) =>
+                            prev.map((r, i) => (i === idx ? { ...r, match: v } : r))
+                          );
+                        }}
+                        placeholder="ej. hola"
+                        style={{
+                          width: "100%",
+                          background: "#1a1a1a",
+                          border: "1px solid #333",
+                          borderRadius: 4,
+                          padding: "6px 8px",
+                          color: "#e0e0e0",
+                          fontSize: 12,
+                        }}
+                      />
+                    </div>
+                    <div style={{ padding: "8px 10px", borderRight: "1px solid #2a2a2a" }}>
+                      <select
+                        value={rule.type === "rag" ? "rag" : "fixed"}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setFlowRules((prev) =>
+                            prev.map((r, i) =>
+                              i === idx ? { ...r, type: v === "rag" ? "rag" : "fixed" } : r
+                            )
+                          );
+                        }}
+                        style={{
+                          width: "100%",
+                          background: "#1a1a1a",
+                          border: "1px solid #333",
+                          borderRadius: 4,
+                          padding: "6px 8px",
+                          color: "#e0e0e0",
+                          fontSize: 12,
+                        }}
+                      >
+                        <option value="fixed">Responder texto fijo</option>
+                        <option value="rag">Usar RAG (base de conocimiento)</option>
+                      </select>
+                    </div>
+                    <div style={{ padding: "8px 10px", display: "flex", gap: 6, alignItems: "flex-start" }}>
+                      {rule.type !== "rag" ? (
+                        <textarea
+                          value={rule.answer}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setFlowRules((prev) =>
+                              prev.map((r, i) => (i === idx ? { ...r, answer: v } : r))
+                            );
+                          }}
+                          rows={2}
+                          placeholder="Texto que enviará el bot"
+                          style={{
+                            flex: 1,
+                            background: "#1a1a1a",
+                            border: "1px solid #333",
+                            borderRadius: 4,
+                            padding: "6px 8px",
+                            color: "#e0e0e0",
+                            fontSize: 12,
+                            resize: "vertical",
+                          }}
+                        />
+                      ) : (
+                        <div style={{ fontSize: 11, color: "#777" }}>
+                          El bot buscará respuesta en la base RAG.
+                        </div>
+                      )}
+                      <button
+                        onClick={() =>
+                          setFlowRules((prev) => prev.filter((_, i) => i !== idx))
+                        }
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "#E85D38",
+                          cursor: "pointer",
+                          fontSize: 16,
+                          lineHeight: 1,
+                        }}
+                        title="Eliminar regla"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+              <button
+                className="btn"
+                style={{
+                  background: "#1a1a1a",
+                  border: "1px solid #333",
+                  color: "#e0e0e0",
+                  borderRadius: 6,
+                  padding: "6px 12px",
+                  fontSize: 12,
+                  cursor: "pointer",
+                }}
+                onClick={() =>
+                  setFlowRules((prev) => [
+                    ...prev,
+                    { match: "", type: "fixed", answer: "" },
+                  ])
+                }
+              >
+                + Agregar regla
+              </button>
+            </div>
+            <div style={{ marginTop: 16, display: "flex", gap: 8, alignItems: "center" }}>
+              <button
+                className="btn btn-primary"
+                onClick={saveWhatsappFlow}
+                disabled={flowSaving}
+              >
+                {flowSaving ? "Guardando..." : "Guardar flow"}
+              </button>
+              {flowLoading && (
+                <div style={{ fontSize: 11, color: "#777" }}>
+                  Cargando flow...
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* CONVERSACIONES WHATSAPP */}
-        {view === "convs" && isAdmin && (
+        {view === "convs" && (
           <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1.4fr", gap: 18 }}>
             {/* Lista de conversaciones */}
             <div style={{ background: "#161616", border: "1px solid #2a2a2a", borderRadius: 10, padding: 16 }}>
@@ -745,6 +1131,7 @@ export default function CRM() {
                       onClick={async () => {
                         setSelectedConv(c);
                         await fetchConvMessages(c.id);
+                        setAgentMessage("");
                       }}
                       style={{
                         padding: "8px 10px",
@@ -759,6 +1146,9 @@ export default function CRM() {
                       <div style={{ fontSize: 11, color: "#777", marginTop: 2 }}>
                         {c.estado} · {c.ultimo_mensaje_at?.slice(0, 16) ?? ""}
                       </div>
+                      <div style={{ fontSize: 10, color: c.modo_humano ? "#E8A838" : "#555", marginTop: 2 }}>
+                        {c.modo_humano ? "En manos de humano" : "Auto BOT"}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -766,18 +1156,58 @@ export default function CRM() {
             </div>
 
             {/* Detalle de conversación */}
-            <div style={{ background: "#161616", border: "1px solid #2a2a2a", borderRadius: 10, padding: 16, minHeight: 260 }}>
+            <div style={{ background: "#161616", border: "1px solid #2a2a2a", borderRadius: 10, padding: 16, minHeight: 260, display: "flex", flexDirection: "column", gap: 10 }}>
               {!selectedConv ? (
                 <div style={{ fontSize: 12, color: "#555" }}>
                   Selecciona una conversación para ver el historial.
                 </div>
               ) : (
                 <>
-                  <div style={{ marginBottom: 10 }}>
-                    <div style={{ fontSize: 12, color: "#e0e0e0" }}>Chat con</div>
-                    <div style={{ fontSize: 13, color: "#E8A838" }}>{selectedConv.whatsapp}</div>
-                    <div style={{ fontSize: 11, color: "#777", marginTop: 2 }}>
-                      Estado: {selectedConv.estado}
+                  <div style={{ marginBottom: 4, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                    <div>
+                      <div style={{ fontSize: 12, color: "#e0e0e0" }}>Chat con</div>
+                      <div style={{ fontSize: 13, color: "#E8A838" }}>{selectedConv.whatsapp}</div>
+                      <div style={{ fontSize: 11, color: "#777", marginTop: 2 }}>
+                        Estado: {selectedConv.estado} · Fase: {selectedConv.fase || "—"}
+                      </div>
+                      <div style={{ fontSize: 11, color: "#777", marginTop: 2 }}>
+                        Modo: {selectedConv.modo_humano ? "HUMANO" : "BOT"}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button
+                        className="btn"
+                        style={{
+                          background: selectedConv.modo_humano ? "#1a1a1a" : "#E8A838",
+                          border: "1px solid #333",
+                          color: selectedConv.modo_humano ? "#e0e0e0" : "#0e0e0e",
+                          borderRadius: 6,
+                          padding: "6px 10px",
+                          fontSize: 11,
+                          cursor: "pointer",
+                        }}
+                        onClick={() => setHumanMode(selectedConv, true)}
+                        disabled={selectedConv.modo_humano}
+                      >
+                        Tomar control
+                      </button>
+                      <button
+                        className="btn"
+                        style={{
+                          background: selectedConv.modo_humano ? "#E8A838" : "#1a1a1a",
+                          border: "1px solid #333",
+                          color: selectedConv.modo_humano ? "#0e0e0e" : "#e0e0e0",
+                          borderRadius: 6,
+                          padding: "6px 10px",
+                          fontSize: 11,
+                          cursor: "pointer",
+                          opacity: selectedConv.modo_humano ? 1 : 0.5,
+                        }}
+                        onClick={() => setHumanMode(selectedConv, false)}
+                        disabled={!selectedConv.modo_humano}
+                      >
+                        Volver a BOT
+                      </button>
                     </div>
                   </div>
                   <div
@@ -785,7 +1215,7 @@ export default function CRM() {
                       borderRadius: 8,
                       border: "1px solid #2a2a2a",
                       padding: 10,
-                      maxHeight: 420,
+                      maxHeight: 360,
                       overflowY: "auto",
                       display: "flex",
                       flexDirection: "column",
@@ -804,7 +1234,7 @@ export default function CRM() {
                           style={{
                             alignSelf: m.rol === "usuario" ? "flex-start" : "flex-end",
                             maxWidth: "80%",
-                            background: m.rol === "usuario" ? "#1f1f1f" : "#E8A838",
+                            background: m.rol === "usuario" ? "#1f1f1f" : m.rol === "agente" ? "#2a3b4f" : "#E8A838",
                             color: m.rol === "usuario" ? "#e0e0e0" : "#0e0e0e",
                             borderRadius: 8,
                             padding: "6px 8px",
@@ -819,6 +1249,37 @@ export default function CRM() {
                         </div>
                       ))
                     )}
+                  </div>
+                  <div style={{ marginTop: 8 }}>
+                    <div style={{ fontSize: 11, color: "#777", marginBottom: 4 }}>
+                      Responder como vendedor (solo afecta WhatsApp, no al bot).
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <textarea
+                        value={agentMessage}
+                        onChange={(e) => setAgentMessage(e.target.value)}
+                        rows={2}
+                        placeholder="Escribe tu respuesta para este contacto..."
+                        style={{
+                          flex: 1,
+                          background: "#1a1a1a",
+                          border: "1px solid #333",
+                          borderRadius: 6,
+                          padding: "6px 8px",
+                          color: "#e0e0e0",
+                          fontSize: 12,
+                          resize: "vertical",
+                          fontFamily: "inherit",
+                        }}
+                      />
+                      <button
+                        className="btn btn-primary"
+                        onClick={sendAgentReply}
+                        disabled={sendingAgent || !agentMessage.trim()}
+                      >
+                        {sendingAgent ? "Enviando..." : "Enviar"}
+                      </button>
+                    </div>
                   </div>
                 </>
               )}
