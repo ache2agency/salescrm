@@ -7,10 +7,10 @@ const AGENDAR_LINK = 'https://crm.windsor.edu.mx/agendar/hola@windsor.edu.mx'
 const FASE_INSTRUCCION: Record<string, string> = {
   saludo: 'Saluda brevemente y pide el nombre del prospecto.',
   programa: 'Ya tienes el nombre. Pregunta qué programa le interesa de forma natural.',
-  correo: 'Ya tienes nombre y programa. Pide el correo para enviarle información. Si ya lo dio, avanza a info_enviada.',
-  info_enviada: 'Comparte un resumen breve y claro del programa usando la BASE DE CONOCIMIENTO. Termina preguntando si tiene alguna duda.',
-  dudas: 'Responde la duda usando la BASE DE CONOCIMIENTO. Cuando no haya más dudas, invita al siguiente paso concreto.',
-  accion: `Ofrece el siguiente paso según el programa. Para inglés (niños/adultos): clase de prueba gratuita. Para licenciaturas/maestrías/diplomados y otros programas: asesoría o inscripción. Incluye siempre este link: ${AGENDAR_LINK}`,
+  correo: 'Pide el correo brevemente. Si el prospecto dice que no tiene o no quiere darlo, avanza de inmediato a info_enviada y comparte la información del programa sin insistir en el correo.',
+  info_enviada: 'COMPARTE AHORA la información del programa usando la BASE DE CONOCIMIENTO: costos, horarios, duración y proceso de inscripción. No preguntes si quiere la info — dala directamente. Al final pregunta si tiene alguna duda.',
+  dudas: 'Responde la duda usando la BASE DE CONOCIMIENTO con datos concretos (precios, horarios, etc.). Cuando no haya más dudas, invita al siguiente paso.',
+  accion: `El prospecto ya tiene la info. Invítalo al siguiente paso concreto: para inglés ofrece clase de prueba gratuita, para otros programas ofrece asesoría o inscripción. Da este link: ${AGENDAR_LINK}`,
   cerrado: 'La conversación está cerrada. Si vuelve a escribir, pregunta si puedes ayudarle en algo más.',
   perdido: 'El prospecto no estaba interesado. Si vuelve a escribir, responde con amabilidad.',
   seguimiento: 'Retoma la conversación de forma amable y recuérdale el siguiente paso.',
@@ -57,11 +57,18 @@ export async function POST(request: Request) {
     const email = state?.email || null
     const programa = state?.programa || null
 
-    // Query RAG if we have a program or user is asking something specific
+    // Build a descriptive program name for RAG (e.g. "adultos" → "Inglés para adultos")
+    const programaForRag = programa
+      ? (/adulto/i.test(programa) ? 'Inglés para adultos'
+        : /ni[ñn]/i.test(programa) ? 'Inglés para niños'
+        : programa)
+      : null
+
+    // Always query RAG when we know the program, or during info/dudas phases
     let ragContext = ''
-    if (programa || fase === 'info_enviada' || fase === 'dudas') {
-      const question = programa
-        ? `Información sobre ${programa} en Instituto Windsor: costos, horarios, duración, proceso de inscripción`
+    if (programaForRag || fase === 'info_enviada' || fase === 'dudas') {
+      const question = programaForRag
+        ? `${programaForRag} en Instituto Windsor: costos, horarios, duración, niveles, proceso de inscripción`
         : userMessage
       ragContext = await queryRAG(question)
     }
@@ -88,12 +95,14 @@ QUÉ HACER AHORA: ${FASE_INSTRUCCION[fase] ?? 'Responde de forma natural y útil
 
 ${ragContext ? `BASE DE CONOCIMIENTO (úsala si es relevante):\n${ragContext}\n` : ''}
 REGLAS:
-- Máximo 3 oraciones por mensaje. Sin listas largas.
-- Si ya tienes un dato (nombre, email, programa), no lo vuelvas a pedir.
-- Si el prospecto da nombre + programa + correo en un mensaje, captúralos todos.
+- En fases de captura de datos (saludo, programa, correo): máximo 2 oraciones.
+- En fases de información (info_enviada, dudas): comparte todos los datos relevantes de la BASE. No resumas ni ocultes información útil.
+- No vuelvas a pedir datos que ya tienes (nombre, email, programa).
+- Si el prospecto da nombre + programa + correo en un mensaje, captúralos todos de una vez.
 - Si pide hablar con una persona, pon requestedHuman: true.
+- Si no hay información en la BASE sobre el programa, dilo con honestidad y ofrece el link de contacto.
 - El campo "siguienteFase" debe ser uno de: saludo, programa, correo, info_enviada, dudas, accion, cerrado, perdido, seguimiento.
-- El campo "programa" es el nombre exacto que usó el prospecto, o null.
+- El campo "programa" es el nombre del programa que mencionó el prospecto, o null.
 - El campo "nombre" es el nombre que dio el prospecto en este mensaje, o null.
 - El campo "email" es el correo que dio en este mensaje, o null.
 
