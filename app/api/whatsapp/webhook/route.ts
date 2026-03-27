@@ -277,7 +277,8 @@ async function askGPT(params: {
 OFERTA EDUCATIVA:
 - Inglés para niños (4-12 años) → clase de prueba gratuita → ${AGENDAR_LINK}
 - Inglés para adultos (12 años en adelante) → clase de prueba gratuita → ${AGENDAR_LINK}
-- Licenciaturas, Maestrías, Diplomados → asesoría, examen de ubicación o inscripción → ${AGENDAR_LINK}
+- Bachillerato, Licenciaturas, Maestrías, Diplomados y otros programas académicos → asesoría, examen de ubicación o inscripción → ${AGENDAR_LINK}
+- Si el prospecto menciona un programa específico (ej: marketing, turismo, enfermería, etc.), búscalo en la BASE DE CONOCIMIENTO para dar información precisa.
 
 DATOS ACTUALES DEL PROSPECTO:
 ${leadContext}
@@ -292,7 +293,7 @@ REGLAS IMPORTANTES:
 - No vuelvas a pedir datos que ya tienes.
 - Si pide hablar con una persona o asesor, pon requestedHuman: true.
 - Si claramente no le interesa (dice "no gracias", "ya no", "baja"), pon noInterest: true.
-- El campo "programa" solo acepta estos valores exactos: "Inglés niños", "Inglés adultos", "Licenciaturas", "Maestrías", "Diplomados", o null.
+- El campo "programa" debe ser el nombre del programa tal como lo mencionó el prospecto (ej: "Marketing", "Turismo", "Inglés niños"), o null si no se detectó.
 - El campo "siguienteFase" solo acepta: saludo, programa, correo, info_enviada, dudas, accion, cerrado, perdido, seguimiento.
 
 Responde ÚNICAMENTE con JSON válido, sin texto adicional:

@@ -441,7 +441,7 @@ const buildLabBotReply = ({ scenario, state, message }) => {
     nextState.nombre = text;
     nextState.fase = "programa";
     nextState.nextStep = "Capturar programa";
-    reply = `Mucho gusto, ${text.split(/\s+/)[0]}. ¿Qué programa te interesa? En Instituto Windsor contamos con *Inglés para niños*, *Inglés para adultos*, *Bachillerato*, *Licenciaturas*, *Maestrías* y *Diplomados*.`;
+    reply = `Mucho gusto, ${text.split(/\s+/)[0]}. ¿Qué programa te interesa? En Instituto Windsor contamos con *Inglés para niños*, *Inglés para adultos*, *Bachillerato*, *Licenciaturas*, *Maestrías*, *Diplomados* y más. ¿Cuál te llama la atención?`;
     return { reply, nextState };
   }
 
@@ -461,19 +461,18 @@ const buildLabBotReply = ({ scenario, state, message }) => {
       return { reply, nextState };
     }
 
-    const normalizedProgram = detectedProgram || normalizeLabProgram(text);
-    if (!isKnownLabProgram(normalizedProgram)) {
-      nextState.fase = "programa";
-      nextState.nextStep = "Validar oferta educativa";
-      reply = getLabInvalidProgramReply();
-      return { reply, nextState };
-    }
+    const normalizedProgram = detectedProgram || normalizeLabProgram(text) || text;
 
     nextState.programa = normalizedProgram;
     nextState.fase = "correo";
     nextState.nextStep = "Capturar correo";
     reply = `Perfecto. Para continuar con *${normalizedProgram}*, ¿me compartes tu correo, por favor?`;
-    return { reply, nextState };
+    return {
+      reply,
+      nextState,
+      queryPrompt: buildLabKnowledgeQuestion(normalizedProgram, "general"),
+      fallbackReply: reply,
+    };
   }
 
   if (!state.email) {
