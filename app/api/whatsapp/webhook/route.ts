@@ -92,16 +92,21 @@ type LeadSnapshot = {
 const AGENDAR_LINK = 'https://crm.windsor.edu.mx/agendar/hola@windsor.edu.mx'
 const BOT_SIGNATURE = 'Instituto Windsor'
 
-function hasLeadName(
-  nombre: string | null | undefined,
-  whatsapp: string | null | undefined
-) {
+function hasLeadName(nombre: string | null | undefined, whatsapp: string | null | undefined) {
   const value = String(nombre || '').trim()
-  if (!value) return false
+  if (!value || value.length < 2) return false
   if (value === String(whatsapp || '').trim()) return false
-  if (value.length < 2) return false
   if (/@/.test(value)) return false
   return true
+}
+
+function hasLeadEmail(email: string | null | undefined) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || '').trim())
+}
+
+function hasLeadProgram(curso: string | null | undefined) {
+  const value = String(curso || '').trim().toLowerCase()
+  return !!value && value !== 'whatsapp - instituto windsor'
 }
 
 function getNextDataPhase(lead: LeadSnapshot | null | undefined, whatsapp: string) {
