@@ -1837,14 +1837,11 @@ export default function CRM() {
         const activeProgram = result.nextState.programa || labState.programa || "tu programa";
         const cta = `\n\n${getLabProgramCTA(activeProgram)}`;
 
-        if (
-          res.ok &&
-          answer &&
-          !/^No encontr[eé] informaci[oó]n relevante\.?$/i.test(answer.trim()) &&
-          labProgramMatchesAnswer(activeProgram, answer)
-        ) {
+        const hasAnswer = res.ok && answer && !/^No encontr[eé] informaci[oó]n relevante\.?$/i.test(answer.trim());
+        const matchOk = labProgramMatchesAnswer(activeProgram, answer) || !isKnownLabProgram(activeProgram);
+        if (hasAnswer && matchOk) {
           finalReply = `Claro. Esto es lo que encontré sobre *${activeProgram}*:\n\n${formatLabKnowledgeAnswer(answer)}${cta}`;
-        } else if (res.ok && answer && !labProgramMatchesAnswer(activeProgram, answer)) {
+        } else if (hasAnswer && !matchOk) {
           finalReply = getLabNoSpecificInfoReply(activeProgram);
         } else if (result.fallbackReply) {
           finalReply = result.fallbackReply;
