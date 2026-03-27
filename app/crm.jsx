@@ -731,7 +731,7 @@ export default function CRM() {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        showToast(data?.error || "Error al indexar (HTTP " + res.status + ")", "error");
+        showToast((data?.error || "Error al indexar") + (data?.detail ? ": " + data.detail : " (HTTP " + res.status + ")"), "error");
         return;
       }
 
