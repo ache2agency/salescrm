@@ -96,6 +96,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true, chunks_indexed: chunks.length, titulo })
   } catch (e) {
+    console.error('[RAG upload] error:', e)
     return NextResponse.json({ error: 'Error procesando carga', detail: String(e) }, { status: 500 })
   }
 }
