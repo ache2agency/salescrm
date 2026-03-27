@@ -2,8 +2,6 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
 export const maxDuration = 60
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require('pdf-parse')
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY
 
@@ -35,6 +33,8 @@ export async function POST(request: Request) {
       }
       titulo = file.name
       const buffer = Buffer.from(await file.arrayBuffer())
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const pdfParse = require('pdf-parse')
       const parsed = await pdfParse(buffer)
       contenido = parsed.text
     } else {
