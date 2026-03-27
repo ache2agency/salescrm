@@ -80,7 +80,7 @@ export async function POST(request: Request) {
           ? `Lista completa de ${programaForRag} disponibles en Instituto Windsor con costos y duración`
           : `${programaForRag} en Instituto Windsor: costos, horarios, duración, niveles, proceso de inscripción`
         : userMessage
-      ragContext = await queryRAG(question, broad ? 12 : 5)
+      ragContext = await queryRAG(question, broad ? 12 : 8)
     }
 
     const leadContext = [
@@ -90,31 +90,30 @@ export async function POST(request: Request) {
       `Fase actual: ${fase}`,
     ].join('\n')
 
-    const systemPrompt = `Eres un asistente comercial de Instituto Windsor (escuela en México) que atiende prospectos por WhatsApp. Tu tono es amable, breve y cercano — como una persona real, no un robot.
+    const systemPrompt = `Eres un asesor comercial de Instituto Windsor (escuela en México) que atiende prospectos por WhatsApp. Tu objetivo es generar confianza y motivar al prospecto a inscribirse. Hablas como una persona real: amable, seguro y con conocimiento del programa.
 
 OFERTA EDUCATIVA:
 - Inglés para niños (4–12 años) → clase de prueba gratuita
 - Inglés para adultos (12 años en adelante) → clase de prueba gratuita
 - Bachillerato, Licenciaturas, Maestrías, Diplomados y más → asesoría o inscripción
-- Para cualquier programa específico que mencione el prospecto, usa la BASE DE CONOCIMIENTO.
 
 DATOS ACTUALES DEL PROSPECTO:
 ${leadContext}
 
 QUÉ HACER AHORA: ${FASE_INSTRUCCION[fase] ?? 'Responde de forma natural y útil.'}
 
-${ragContext ? `BASE DE CONOCIMIENTO (úsala si es relevante):\n${ragContext}\n` : ''}
+${ragContext ? `INFORMACIÓN DEL PROGRAMA (usa TODO lo relevante para convencer al prospecto):\n${ragContext}\n` : ''}
 REGLAS:
-- En fases de captura de datos (saludo, programa, correo): máximo 2 oraciones.
-- En fases de información (info_enviada, dudas): comparte todos los datos relevantes de la BASE. No resumas ni ocultes información útil.
-- No vuelvas a pedir datos que ya tienes (nombre, email, programa).
-- Si el prospecto da nombre + programa + correo en un mensaje, captúralos todos de una vez.
-- Si pide hablar con una persona, pon requestedHuman: true.
-- Si no hay información en la BASE sobre el programa, dilo con honestidad y ofrece el link de contacto.
-- El campo "siguienteFase" debe ser uno de: saludo, programa, correo, info_enviada, dudas, accion, cerrado, perdido, seguimiento.
-- El campo "programa" es el nombre del programa que mencionó el prospecto, o null.
-- El campo "nombre" es el nombre que dio el prospecto en este mensaje, o null.
-- El campo "email" es el correo que dio en este mensaje, o null.
+- Fases de captura (saludo, programa, correo): respuestas cortas, máximo 2 oraciones.
+- Fases de información (info_enviada, dudas): da TODA la información útil del programa. Incluye duración, costos, horarios, certificaciones, salidas profesionales, modalidad — todo lo que genere confianza. No recortes ni resumas en exceso.
+- No repitas datos que ya tienes del prospecto.
+- Si el prospecto da nombre + programa + correo juntos, captúralos todos de una vez.
+- Si pide hablar con una persona real, pon requestedHuman: true.
+- Si no hay info en la BASE, dilo con honestidad y ofrece el link de agendamiento.
+- El campo "siguienteFase": saludo, programa, correo, info_enviada, dudas, accion, cerrado, perdido o seguimiento.
+- "programa": nombre que usó el prospecto, o null.
+- "nombre": nombre dado en este mensaje, o null.
+- "email": correo dado en este mensaje, o null.
 
 Responde ÚNICAMENTE con JSON válido:
 {
@@ -143,7 +142,7 @@ Responde ÚNICAMENTE con JSON válido:
         model: 'gpt-4o',
         messages: chatMessages,
         temperature: 0.6,
-        max_tokens: 400,
+        max_tokens: 700,
         response_format: { type: 'json_object' },
       }),
       signal: AbortSignal.timeout(15000),
