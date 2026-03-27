@@ -75,503 +75,6 @@ const getInfoTemplateForLead = (lead) => {
   return `Hola ${nombre}. Gracias por tu interés en Instituto Windsor. Con gusto te compartimos información general del programa que nos solicitaste. Si deseas, también podemos ayudarte con el siguiente paso desde aquí: ${AGENDAR_LINK}`;
 };
 
-const getLabProgramInfo = (programa = "") => {
-  const program = String(programa || "").toLowerCase();
-
-  if (program.includes("cursos de inglés") || program.includes("cursos de ingles")) {
-    return "Para *Cursos de inglés*, Instituto Windsor ofrece opciones para niños y para adultos, con modalidad presencial y en línea según el programa. Si quieres, también puedo decirte cuál de las dos opciones se ajusta mejor a tu caso.";
-  }
-
-  if (program.includes("niños")) {
-    return "Para *Inglés para niños*, trabajamos por niveles, con acompañamiento cercano y enfoque práctico. El siguiente paso ideal es *examen de ubicación* y después *clase muestra*.";
-  }
-
-  if (program.includes("adultos")) {
-    return "Para *Inglés para adultos*, manejamos avance por niveles, práctica conversacional y seguimiento cercano. El siguiente paso ideal es *examen de ubicación* y después *clase muestra*.";
-  }
-
-  if (program.includes("bachiller")) {
-    return "Para *Bachillerato*, te orientamos sobre admisión, plan académico y proceso de inscripción. El siguiente paso ideal es resolver dudas y avanzar con tu proceso.";
-  }
-
-  if (program.includes("licenci")) {
-    return "Para *Licenciaturas*, te orientamos sobre admisión, plan académico, promoción vigente y proceso de inscripción. El siguiente paso ideal es revisar dudas y avanzar con tu proceso.";
-  }
-
-  if (program.includes("maestr")) {
-    return "Para *Maestrías*, te orientamos sobre admisión, perfil de ingreso, promoción vigente y proceso de inscripción. El siguiente paso ideal es revisar dudas y avanzar con tu proceso.";
-  }
-
-  if (program.includes("diplom")) {
-    return "Para *Diplomados*, te orientamos sobre contenido, modalidad, promoción vigente y proceso de inscripción. El siguiente paso ideal es revisar dudas y avanzar con tu proceso.";
-  }
-
-  return "Puedo compartirte información general del programa y ayudarte a avanzar con el siguiente paso en tu proceso.";
-};
-
-const normalizeLabProgram = (programa = "") => {
-  const program = String(programa || "").trim().toLowerCase();
-
-  if (!program) return "";
-  if (
-    program.includes("cursos de inglés") ||
-    program.includes("cursos de ingles") ||
-    program.includes("curso de inglés") ||
-    program.includes("curso de ingles") ||
-    program === "ingles" ||
-    program === "inglés"
-  ) {
-    return "Cursos de inglés";
-  }
-  if (program.includes("niñ")) return "Inglés para niños";
-  if (program.includes("adult")) return "Inglés para adultos";
-  if (program.includes("bach")) return "Bachillerato";
-  if (program.includes("lic")) return "Licenciaturas";
-  if (program.includes("maestr")) return "Maestrías";
-  if (program.includes("dipl")) return "Diplomados";
-
-  return programa;
-};
-
-const isLabEmail = (value = "") => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
-
-const normalizeLabText = (value = "") =>
-  String(value || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim();
-
-const isGenericEnglishCoursesRequest = (value = "") => {
-  const text = normalizeLabText(value);
-
-  if (!text) return false;
-
-  const mentionsEnglishCourses =
-    text.includes("curso de ingles") ||
-    text.includes("cursos de ingles") ||
-    text === "ingles" ||
-    text === "curso de ingles" ||
-    text === "cursos de ingles";
-
-  const refersToDegreeInEnglish =
-    text.includes("licenciatura en ingles") ||
-    text.includes("maestria en ingles") ||
-    text.includes("diplomado en ingles");
-
-  return mentionsEnglishCourses && !refersToDegreeInEnglish;
-};
-
-const LAB_PROGRAM_OPTIONS = [
-  "Cursos de inglés",
-  "Inglés para niños",
-  "Inglés para adultos",
-  "Bachillerato",
-  "Licenciaturas",
-  "Maestrías",
-  "Diplomados",
-  "Psicología",
-  "Administración Turística",
-  "Relaciones Públicas y Mercadotecnia",
-];
-
-const isKnownLabProgram = (programa = "") => LAB_PROGRAM_OPTIONS.includes(normalizeLabProgram(programa));
-
-const isEnglishCourseProgram = (programa = "") => {
-  const normalized = normalizeLabProgram(programa);
-  return normalized === "Cursos de inglés" || normalized === "Inglés para niños" || normalized === "Inglés para adultos";
-};
-
-const extractLabProgramFromMessage = (value = "") => {
-  const text = normalizeLabText(value);
-
-  if (!text) return null;
-
-  if (
-    text.includes("psico") ||
-    text.includes("psicologia") ||
-    text.includes("lic en psico") ||
-    text.includes("licenciatura en psicologia")
-  ) {
-    return "Psicología";
-  }
-
-  if (
-    text.includes("turis") ||
-    text.includes("admin turistica") ||
-    text.includes("administracion turistica") ||
-    text.includes("lic en turismo")
-  ) {
-    return "Administración Turística";
-  }
-
-  if (
-    text.includes("relaciones publicas") ||
-    text.includes("relaciones publicas y mercadotecnia") ||
-    text.includes("mercadotec") ||
-    text.includes("rp y merca")
-  ) {
-    return "Relaciones Públicas y Mercadotecnia";
-  }
-
-  if (text.includes("ingles para ninos") || text.includes("curso de ingles para ninos") || text.includes("ninos")) {
-    return "Inglés para niños";
-  }
-
-  if (text.includes("ingles para adultos") || text.includes("curso de ingles para adultos") || text.includes("adultos")) {
-    return "Inglés para adultos";
-  }
-
-  if (text.includes("bach")) return "Bachillerato";
-  if (text.includes("maestr")) return "Maestrías";
-  if (text.includes("diplom")) return "Diplomados";
-  if (text.includes("lics") || text.includes("licenciaturas") || /\blic\b/.test(text)) return "Licenciaturas";
-
-  return null;
-};
-
-const isBroadAcademicFamily = (programa = "") => {
-  const normalized = normalizeLabProgram(programa);
-  return ["Licenciaturas", "Maestrías", "Diplomados"].includes(normalized);
-};
-
-const getLabProgramCTA = (programa = "") => {
-  const normalized = normalizeLabProgram(programa);
-
-  if (isEnglishCourseProgram(normalized)) {
-    if (normalized === "Cursos de inglés") {
-      return "Si quieres, ahora dime si te interesa *Inglés para niños* o *Inglés para adultos* y te comparto solo esa opción.";
-    }
-    return "Si quieres, el siguiente paso es ayudarte a agendar tu *clase muestra*.";
-  }
-
-  if (isBroadAcademicFamily(normalized)) {
-    return `Si quieres, ahora dime cuál ${normalized.toLowerCase().slice(0, -1)} te interesa y te comparto solo la información de esa opción.`;
-  }
-
-  if (normalized === "Bachillerato") {
-    return "Si quieres, también puedo ayudarte con *costos*, *horarios* o con el *siguiente paso* de tu proceso.";
-  }
-
-  return "Si quieres, también puedo ayudarte con el *siguiente paso* de tu proceso.";
-};
-
-const getLabInvalidProgramReply = () =>
-  "No identifiqué esa oferta educativa dentro de Instituto Windsor. Las opciones que manejo en esta simulación son:\n\n• Inglés para niños\n• Inglés para adultos\n• Bachillerato\n• Licenciaturas\n• Maestrías\n• Diplomados";
-
-const buildLabKnowledgeQuestion = (programa = "", intent = "general") => {
-  const program = normalizeLabProgram(programa) || "el programa";
-
-  if (intent === "catalogo") {
-    return `Comparte únicamente la oferta educativa disponible dentro de ${program} en Instituto Windsor. No des costos, horarios ni información detallada. Solo enumera las opciones y termina preguntando cuál le interesa al prospecto. Si el contexto no contiene información de ${program}, dilo claramente.`;
-  }
-
-  if (intent === "costos") {
-    return `Comparte únicamente la información disponible sobre costos, colegiaturas, pagos o promociones de ${program} en Instituto Windsor. Si no hay costos exactos, resume lo que sí exista. Si el contexto no contiene información de ${program}, dilo claramente.`;
-  }
-
-  if (intent === "horarios") {
-    return `Comparte únicamente la información disponible sobre horarios, días, turnos, modalidad o duración de ${program} en Instituto Windsor. Si no hay horarios exactos, resume lo que sí exista. Si el contexto no contiene información de ${program}, dilo claramente.`;
-  }
-
-  return `Comparte la información general más relevante de ${program} en Instituto Windsor, incluyendo lo más útil para un prospecto que acaba de pedir informes. Si el contexto no contiene información específica de ${program}, dilo claramente y no respondas con otra oferta.`;
-};
-
-const labProgramMatchesAnswer = (programa = "", answer = "") => {
-  const normalizedProgram = normalizeLabProgram(programa).toLowerCase();
-  const normalizedAnswer = String(answer || "").toLowerCase();
-
-  if (!normalizedProgram || !normalizedAnswer) return false;
-
-  if (normalizedProgram === "inglés para niños") {
-    return normalizedAnswer.includes("niñ");
-  }
-
-  if (normalizedProgram === "inglés para adultos") {
-    return normalizedAnswer.includes("adult");
-  }
-
-  if (normalizedProgram === "bachillerato") {
-    return normalizedAnswer.includes("bachiller");
-  }
-
-  if (normalizedProgram === "licenciaturas") {
-    return normalizedAnswer.includes("licenci");
-  }
-
-  if (normalizedProgram === "maestrías") {
-    return normalizedAnswer.includes("maestr");
-  }
-
-  if (normalizedProgram === "diplomados") {
-    return normalizedAnswer.includes("diplom");
-  }
-
-  if (normalizedProgram === "psicología") {
-    return normalizedAnswer.includes("psicolog");
-  }
-
-  if (normalizedProgram === "administración turística") {
-    return normalizedAnswer.includes("turist");
-  }
-
-  if (normalizedProgram === "relaciones públicas y mercadotecnia") {
-    return normalizedAnswer.includes("mercadotec") || normalizedAnswer.includes("relaciones públicas") || normalizedAnswer.includes("relaciones publicas");
-  }
-
-  return normalizedAnswer.includes(normalizedProgram);
-};
-
-const getLabNoSpecificInfoReply = (programa = "") =>
-  `No encontré información específica sobre *${programa}* dentro de la BASE actual. Si quieres, puedo mostrarte primero el catálogo general o revisar otra oferta educativa.`;
-
-const getLabOfferSwitchReply = (programa = "") => {
-  const normalized = normalizeLabProgram(programa);
-
-  if (isBroadAcademicFamily(normalized)) {
-    return `Claro. Puedo cambiar de tema y ayudarte con *${normalized}*. Primero te comparto solo las opciones disponibles dentro de esa oferta y tú me dices cuál te interesa.`;
-  }
-
-  return `Claro. Cambio el tema de la conversación y ahora te comparto información sobre *${normalized}*.`;
-};
-
-const getLabEnglishFamilyReply = () =>
-  "Claro. También puedo ayudarte con *Cursos de inglés*. Primero te comparto la información general y, si quieres, después me dices si te interesa:\n\n• *Inglés para niños*\n• *Inglés para adultos*";
-
-const formatLabKnowledgeAnswer = (answer = "") => {
-  let formatted = String(answer || "").trim();
-
-  if (!formatted) return "";
-
-  formatted = formatted
-    .replace(/^Por supuesto,\s*/i, "")
-    .replace(/^Claro\.\s*/i, "")
-    .replace(/^Aquí tienes\s*/i, "")
-    .replace(/\s+\-\s+\*\*/g, "\n\n**")
-    .replace(/\*\*(.+?):\*\*/g, "\n\n**$1:**")
-    .replace(/\s+\-\s+/g, "\n• ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-
-  return formatted;
-};
-
-const buildLabBotReply = ({ scenario, state, message }) => {
-  const text = String(message || "").trim();
-  const lower = text.toLowerCase();
-  const genericEnglishRequest = isGenericEnglishCoursesRequest(text);
-  const nextState = { ...state };
-  const detectedProgram = extractLabProgramFromMessage(text);
-  const activeProgram = detectedProgram || state.programa;
-  let reply = "";
-
-  if (scenario === "walkin") {
-    if (genericEnglishRequest) {
-      nextState.programa = "Cursos de inglés";
-      nextState.fase = "seguimiento";
-      nextState.nextStep = "Compartir información general de cursos de inglés y luego precisar niños o adultos";
-      reply = getLabEnglishFamilyReply();
-      return {
-        reply,
-        nextState,
-        queryPrompt: buildLabKnowledgeQuestion("Cursos de inglés", "general"),
-        fallbackReply: `${getLabEnglishFamilyReply()}\n\n${getLabProgramInfo("Cursos de inglés")}\n\n${getLabProgramCTA("Cursos de inglés")}`,
-      };
-    }
-
-    if (detectedProgram && detectedProgram !== state.programa) {
-      nextState.programa = detectedProgram;
-      nextState.nextStep = "Resolver información del nuevo programa";
-    }
-
-    if (state.fase === "saludo") {
-      reply = `Hola ${state.nombre || ""}, soy el asistente de admisiones de Instituto Windsor. Ya tengo registrado tu interés en *${state.programa || "el programa"}*. Si te parece bien, puedo compartirte por aquí la información inicial y ayudarte con el siguiente paso.`;
-      nextState.fase = "confirmacion_info";
-      nextState.nextStep = "Esperar confirmación para compartir información";
-      return { reply, nextState };
-    }
-
-    if (state.fase === "confirmacion_info") {
-      if (/si|sí|claro|ok|dale|perfecto|va|me parece|informaci[oó]n|info/.test(lower)) {
-        reply = `Perfecto. Te comparto la información inicial de *${activeProgram || "tu programa"}*...`;
-        nextState.fase = "seguimiento";
-        nextState.nextStep = "Resolver costos, horarios o siguiente paso";
-        return {
-          reply,
-          nextState,
-          queryPrompt: buildLabKnowledgeQuestion(activeProgram, isBroadAcademicFamily(activeProgram) ? "catalogo" : "general"),
-          fallbackReply: `Te comparto la información inicial de *${activeProgram || "tu programa"}*: ${getLabProgramInfo(activeProgram)} Si quieres, después de esto también puedo ayudarte con *costos*, *horarios* o con el *siguiente paso*.`,
-        };
-      }
-
-      reply = `Claro. Cuando quieras, puedo compartirte por aquí la información inicial de *${state.programa || "tu programa"}* y ayudarte a continuar con el proceso.`;
-      nextState.nextStep = "Esperar confirmación para compartir información";
-      return { reply, nextState };
-    }
-
-    if (/precio|costo|colegiatura|horario|duracion|duración|\?/.test(lower)) {
-      const intent = /precio|costo|colegiatura/.test(lower) ? "costos" : "horarios";
-      reply = `Con gusto. Déjame revisar la información de *${activeProgram || "tu programa"}*...`;
-      nextState.nextStep = "Seguir resolviendo costos, horarios o dudas";
-      return {
-        reply,
-        nextState,
-        queryPrompt: buildLabKnowledgeQuestion(activeProgram, intent),
-        fallbackReply: `Con gusto puedo ayudarte con esa duda sobre *${activeProgram || "tu programa"}*. ${getLabProgramInfo(activeProgram)}`,
-      };
-    }
-
-    if (/informaci[oó]n|info|detalles/.test(lower)) {
-      reply = `Claro. Déjame revisar la información de *${activeProgram || "tu programa"}*...`;
-      nextState.nextStep = "Resolver costos, horarios o siguiente paso";
-      return {
-        reply,
-        nextState,
-        queryPrompt: buildLabKnowledgeQuestion(activeProgram, isBroadAcademicFamily(activeProgram) ? "catalogo" : "general"),
-        fallbackReply: `Sobre *${activeProgram || "tu programa"}*: ${getLabProgramInfo(activeProgram)} Si quieres, también puedo ayudarte con *costos*, *horarios* o con el *siguiente paso*.`,
-      };
-    }
-
-    reply = `Perfecto. Retomo tu proceso de *${activeProgram || "tu programa"}* en Instituto Windsor. Si quieres, te apoyo con *costos*, *horarios* o con el *siguiente paso* de tu proceso.`;
-    nextState.nextStep = "Resolver costos, horarios o llevar al siguiente paso";
-    return { reply, nextState };
-  }
-
-  if (!state.nombre) {
-    nextState.nombre = text;
-    nextState.fase = "programa";
-    nextState.nextStep = "Capturar programa";
-    reply = `Mucho gusto, ${text.split(/\s+/)[0]}. ¿Qué programa te interesa? En Instituto Windsor contamos con *Inglés para niños*, *Inglés para adultos*, *Bachillerato*, *Licenciaturas*, *Maestrías*, *Diplomados* y más. ¿Cuál te llama la atención?`;
-    return { reply, nextState };
-  }
-
-  if (!state.programa) {
-    if (genericEnglishRequest) {
-      nextState.programa = "Cursos de inglés";
-      nextState.fase = "correo";
-      nextState.nextStep = "Capturar correo para cursos de inglés";
-      reply = "Perfecto. Para continuar con *Cursos de inglés*, ¿me compartes tu correo, por favor?";
-      return { reply, nextState };
-    }
-
-    if (isLabEmail(text)) {
-      nextState.fase = "programa";
-      nextState.nextStep = "Capturar programa correctamente";
-      reply = "Todavía no me compartes el programa de interés. Antes del correo, dime por favor qué te interesa: *Inglés para niños*, *Inglés para adultos*, *Bachillerato*, *Licenciaturas*, *Maestrías* o *Diplomados*.";
-      return { reply, nextState };
-    }
-
-    const normalizedProgram = detectedProgram || normalizeLabProgram(text) || text;
-
-    nextState.programa = normalizedProgram;
-    nextState.fase = "correo";
-    nextState.nextStep = "Capturar correo";
-    reply = `Perfecto. Para continuar con *${normalizedProgram}*, ¿me compartes tu correo, por favor?`;
-    return { reply, nextState };
-  }
-
-  if (!state.email) {
-    if (genericEnglishRequest) {
-      nextState.programa = "Cursos de inglés";
-      nextState.nextStep = "Compartir información general de cursos de inglés";
-    }
-
-    if (detectedProgram && detectedProgram !== state.programa) {
-      nextState.programa = detectedProgram;
-      nextState.nextStep = "Resolver información del nuevo programa";
-    }
-    nextState.email = text;
-    nextState.fase = "seguimiento";
-    nextState.nextStep = "Resolver costos, horarios o siguiente paso";
-    reply = `Gracias, ${state.nombre}. Déjame revisar la información inicial de *${activeProgram}*...`;
-    return {
-      reply,
-      nextState,
-      queryPrompt: buildLabKnowledgeQuestion(activeProgram, isBroadAcademicFamily(activeProgram) ? "catalogo" : "general"),
-      fallbackReply: `Te comparto la información inicial de *${activeProgram}*: ${getLabProgramInfo(activeProgram)} Si quieres, ahora mismo puedo ayudarte con *costos*, *horarios* o con el *siguiente paso*. ¿Qué te interesa revisar primero?`,
-    };
-  }
-
-  if (genericEnglishRequest) {
-    nextState.programa = "Cursos de inglés";
-    nextState.fase = "seguimiento";
-    nextState.nextStep = "Compartir información general de cursos de inglés y luego precisar niños o adultos";
-    reply = getLabEnglishFamilyReply();
-    return {
-      reply,
-      nextState,
-      queryPrompt: buildLabKnowledgeQuestion("Cursos de inglés", "general"),
-      fallbackReply: `${getLabEnglishFamilyReply()}\n\n${getLabProgramInfo("Cursos de inglés")}\n\n${getLabProgramCTA("Cursos de inglés")}`,
-    };
-  }
-
-  if (detectedProgram && detectedProgram !== state.programa) {
-    nextState.programa = detectedProgram;
-    nextState.fase = "seguimiento";
-    nextState.nextStep = "Resolver información del nuevo programa";
-    reply = getLabOfferSwitchReply(detectedProgram);
-    return {
-      reply,
-      nextState,
-      queryPrompt: buildLabKnowledgeQuestion(detectedProgram, isBroadAcademicFamily(detectedProgram) ? "catalogo" : "general"),
-      fallbackReply: `Sobre *${detectedProgram}*: ${getLabProgramInfo(detectedProgram)} ${getLabProgramCTA(detectedProgram)}`,
-    };
-  }
-
-  if (/informaci[oó]n|info|detalles|cu[eé]ntame m[aá]s|dame la informaci[oó]n/.test(lower)) {
-    nextState.fase = "accion";
-    nextState.nextStep = "Resolver costos, horarios o llevar al siguiente paso";
-    reply = `Claro. Déjame revisar la información de *${activeProgram}*...`;
-    return {
-      reply,
-      nextState,
-      queryPrompt: buildLabKnowledgeQuestion(activeProgram, isBroadAcademicFamily(activeProgram) ? "catalogo" : "general"),
-      fallbackReply: `Sobre *${activeProgram}*: ${getLabProgramInfo(activeProgram)} Si quieres, después de esto también puedo ayudarte con *costos*, *horarios* o con el *siguiente paso*.`,
-    };
-  }
-
-  if (/precio|precios|costo|costos|colegiatura/.test(lower)) {
-    nextState.fase = "accion";
-    nextState.nextStep = "Explicar costos o seguir proceso";
-    reply = `Claro. Déjame revisar los costos de *${activeProgram}*...`;
-    return {
-      reply,
-      nextState,
-      queryPrompt: buildLabKnowledgeQuestion(activeProgram, "costos"),
-      fallbackReply: `Aquí el bot debería responder con los costos vigentes de *${activeProgram}*. Si no hay costos exactos, al menos debería responder con la información inicial disponible y ayudarte a avanzar con el siguiente paso.`,
-    };
-  }
-
-  if (/horario|horarios|dias|días|turno/.test(lower)) {
-    nextState.fase = "accion";
-    nextState.nextStep = "Explicar horarios o seguir proceso";
-    reply = `Claro. Déjame revisar los horarios de *${activeProgram}*...`;
-    return {
-      reply,
-      nextState,
-      queryPrompt: buildLabKnowledgeQuestion(activeProgram, "horarios"),
-      fallbackReply: `Aquí el bot debería responder con los horarios disponibles de *${activeProgram}*. Si no hay horarios exactos, al menos debería responder con la información inicial disponible y ayudarte a avanzar con el siguiente paso.`,
-    };
-  }
-
-  if (/siguiente paso|agendar|inscribir|inscripci[oó]n|proceso/.test(lower)) {
-    nextState.fase = "cerrado";
-    nextState.nextStep = "Cerrar proceso";
-    reply = `Perfecto. El siguiente paso es agendar tu cita o iniciar tu proceso de inscripción en *${activeProgram}*. Puedes hacerlo aquí: ${AGENDAR_LINK}`;
-    return { reply, nextState };
-  }
-
-  if (/si|sí|quiero|ok|dale|perfecto/.test(lower)) {
-    nextState.fase = "accion";
-    nextState.nextStep = "Ofrecer siguiente paso";
-    reply = `Perfecto. Para continuar con *${activeProgram}*, el siguiente paso es agendar tu cita. Puedes hacerlo aquí: ${AGENDAR_LINK}`;
-    return { reply, nextState };
-  }
-
-  reply = `Entendido. En esta simulación, el bot ya tiene contexto suficiente para seguir con información de *${activeProgram}*, responder *costos* o *horarios*, o llevarte al siguiente paso según el pipeline.`;
-  nextState.nextStep = "Seguir conversación con información útil";
-  return { reply, nextState };
-};
 
 export default function CRM() {
   const [leads, setLeads] = useState([]);
@@ -1786,8 +1289,8 @@ export default function CRM() {
             nombre: labWalkinData.nombre,
             email: labWalkinData.email,
             programa: labWalkinData.programa,
-            fase: "saludo",
-            nextStep: "Retomar el interés ya capturado",
+            fase: "info_enviada",
+            nextStep: "Resolver dudas o llevar al siguiente paso",
           }
         : {
             origen: "ads",
@@ -1795,12 +1298,12 @@ export default function CRM() {
             email: "",
             programa: "",
             fase: "saludo",
-            nextStep: "Pedir nombre",
+            nextStep: "Capturar nombre",
           };
 
     const openingMessage =
       labScenario === "walkin"
-        ? `Hola ${labWalkinData.nombre || ""}, soy el asistente de admisiones de Instituto Windsor. Ya tengo registrado tu interés en *${labWalkinData.programa || "el programa"}*. Con gusto puedo ayudarte con el siguiente paso o resolver tus dudas por este medio.`
+        ? `Hola ${labWalkinData.nombre || ""}, soy el asistente de Instituto Windsor. Ya tenemos tu registro de interés en *${labWalkinData.programa || "el programa"}*. ¿Tienes alguna duda o quieres saber el siguiente paso?`
         : "Hola, gracias por comunicarte con Instituto Windsor. ¿Me compartes tu nombre, por favor?";
 
     setLabState(initialState);
@@ -1813,50 +1316,46 @@ export default function CRM() {
     if (!labInput.trim() || labSending) return;
     const userMessage = labInput.trim();
     setLabSending(true);
-    const result = buildLabBotReply({
-      scenario: labScenario,
-      state: labState,
-      message: userMessage,
-    });
-
     const nextMessages = [...labMessages, { role: "user", content: userMessage }];
     setLabMessages(nextMessages);
-    setLabState(result.nextState);
     setLabInput("");
 
-    let finalReply = result.reply;
+    try {
+      const res = await fetch("/api/whatsapp/lab", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: labMessages,
+          state: labState,
+          userMessage,
+          scenario: labScenario,
+        }),
+      });
 
-    if (result.queryPrompt) {
-      try {
-        const res = await fetch("/api/rag/query", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ question: result.queryPrompt }),
-        });
+      const data = await res.json().catch(() => ({}));
 
-        const data = await res.json().catch(() => ({}));
-        const answer = data?.answer || "";
-        const activeProgram = result.nextState.programa || labState.programa || "tu programa";
-        const cta = `\n\n${getLabProgramCTA(activeProgram)}`;
-
-        const hasAnswer = res.ok && answer && !/^No encontr[eé] informaci[oó]n relevante\.?$/i.test(answer.trim());
-        const matchOk = labProgramMatchesAnswer(activeProgram, answer) || !isKnownLabProgram(activeProgram);
-        if (hasAnswer && matchOk) {
-          finalReply = `Claro. Esto es lo que encontré sobre *${activeProgram}*:\n\n${formatLabKnowledgeAnswer(answer)}${cta}`;
-        } else if (hasAnswer && !matchOk) {
-          finalReply = getLabNoSpecificInfoReply(activeProgram);
-        } else if (result.fallbackReply) {
-          finalReply = result.fallbackReply;
-        }
-      } catch {
-        if (result.fallbackReply) {
-          finalReply = result.fallbackReply;
-        }
+      if (!res.ok) {
+        setLabMessages([...nextMessages, { role: "assistant", content: "Error al conectar con el bot. Intenta de nuevo." }]);
+        setLabSending(false);
+        return;
       }
-    }
 
-    setLabMessages([...nextMessages, { role: "assistant", content: finalReply }]);
-    setLabSending(false);
+      const newState = {
+        ...labState,
+        fase: data.siguienteFase || labState.fase,
+        nextStep: data.nextStep || labState.nextStep,
+        nombre: data.nombre || labState.nombre,
+        email: data.email || labState.email,
+        programa: data.programa || labState.programa,
+      };
+
+      setLabState(newState);
+      setLabMessages([...nextMessages, { role: "assistant", content: data.respuesta || "..." }]);
+    } catch {
+      setLabMessages([...nextMessages, { role: "assistant", content: "Error de red. Intenta de nuevo." }]);
+    } finally {
+      setLabSending(false);
+    }
   };
 
   const resetLabSimulation = () => {
