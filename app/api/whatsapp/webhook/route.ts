@@ -92,136 +92,6 @@ type LeadSnapshot = {
 const AGENDAR_LINK = 'https://crm.windsor.edu.mx/agendar/hola@windsor.edu.mx'
 const BOT_SIGNATURE = 'Instituto Windsor'
 
-/** Solo programas de idiomas (niños/adultos) tienen clase de prueba; el resto: examen, inscripción o asesor */
-function programHasClasePrueba(curso: string | null | undefined): boolean {
-  if (!curso) return false
-  const c = String(curso).toLowerCase()
-  return c.includes('idioma') || c.includes('ingles') || c.includes('niños') || c.includes('ninos') || c.includes('adultos')
-}
-
-/** Palabras que no son nombre (saludos, etc.) */
-const NO_ES_NOMBRE = /^(hola|buenas|hi|hello|hey|buen dia|buenos dias|holi|qué tal|saludos|buen día|buenos días)$/i
-
-/** Detecta si el texto parece un nombre (no correo, no saludo, no solo números) */
-function looksLikeName(t: string): boolean {
-  const s = t.trim()
-  if (s.length < 2) return false
-  if (/@/.test(s)) return false
-  if (/^\d+$/.test(s)) return false
-  if (NO_ES_NOMBRE.test(s)) return false
-  return true
-}
-
-/** Detecta si el texto es un correo válido */
-function looksLikeEmail(t: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((t || '').trim())
-}
-
-function extractEmail(text: string): string | null {
-  const match = text.match(/[^\s@]+@[^\s@]+\.[^\s@]+/)
-  return match ? match[0].trim() : null
-}
-
-/** Tipo de programa según botwindsor: inglés niños, inglés adultos, licenciaturas, maestrías, diplomados */
-function detectProgramType(text: string): string | null {
-  const lower = text.replace(/[^\w\sáéíóú]/gi, '').toLowerCase()
-  if (lower.includes('niño') || lower.includes('nino') || lower.includes('niños') || lower.includes('ninos') || (lower.includes('ingles') && lower.includes('niño'))) return 'ingles_niños'
-  if (lower.includes('adulto') || (lower.includes('ingles') && !lower.includes('niño'))) return 'ingles_adultos'
-  if (lower.includes('licenciatura')) return 'licenciaturas'
-  if (lower.includes('maestria') || lower.includes('maestrías')) return 'maestrías'
-  if (lower.includes('diplomado')) return 'diplomados'
-  if (lower.includes('idioma') || lower.includes('ingles')) return 'idiomas'
-  return null
-}
-
-function getProgramLabel(programType: string | null): string | null {
-  if (!programType) return null
-  switch (programType) {
-    case 'ingles_niños':
-      return 'Inglés niños'
-    case 'ingles_adultos':
-      return 'Inglés adultos'
-    case 'licenciaturas':
-      return 'Licenciaturas'
-    case 'maestrías':
-      return 'Maestrías'
-    case 'diplomados':
-      return 'Diplomados'
-    case 'idiomas':
-      return 'Idiomas'
-    default:
-      return programType
-  }
-}
-
-function getProgramInfoBlock(curso: string | null | undefined) {
-  const normalized = (curso || '').toLowerCase()
-
-  if (normalized.includes('niños')) {
-    return 'Con gusto te comparto información general de *Inglés para niños* en Instituto Windsor: trabajo por niveles, acompañamiento cercano y un enfoque práctico para desarrollar comprensión y conversación desde edades tempranas.'
-  }
-
-  if (normalized.includes('adultos') || normalized.includes('idiomas') || normalized.includes('ingles')) {
-    return 'Con gusto te comparto información general de *Inglés para adultos* en Instituto Windsor: avance por niveles, enfoque conversacional, práctica constante y acompañamiento para usar el idioma en contextos reales.'
-  }
-
-  if (normalized.includes('licenciatura')) {
-    return 'Con gusto te comparto información general de *Licenciaturas*: orientación de admisiones, información del proceso de ingreso y acompañamiento para revisar el programa que mejor se ajuste a tu perfil.'
-  }
-
-  if (normalized.includes('maestr')) {
-    return 'Con gusto te comparto información general de *Maestrías*: enfoque profesional, acompañamiento de admisiones y orientación para revisar compatibilidad con tu perfil y objetivos.'
-  }
-
-  if (normalized.includes('diplomado')) {
-    return 'Con gusto te comparto información general de *Diplomados*: formación práctica, actualización profesional y orientación para elegir la opción más conveniente.'
-  }
-
-  return 'Con gusto te comparto información general del programa. Estoy para ayudarte a revisar opciones, resolver dudas y acompañarte en el siguiente paso según tu interés.'
-}
-
-function detectHumanRequest(text: string) {
-  return /asesor|humano|persona|agente|vendedor|llamada|marcarme|marquenme|contactenme|contactenme|contactarme/i.test(text)
-}
-
-function detectNoInterest(text: string) {
-  return /no quiero|no me interesa|no gracias|cancelar|baja|ya no|déjalo|dejalo/i.test(text)
-}
-
-function detectAffirmative(text: string) {
-  return /sí|si\b|dale|ok|vale|yes|agendar|inscribir|clase prueba|examen|asesor|llamada/i.test(text)
-}
-
-function detectQuestionIntent(text: string) {
-  return /duda|pregunta|saber|cuanto|costo|precio|horario|información|info|quiero saber|cuéntame|\?/i.test(text)
-}
-
-function detectNoQuestions(text: string) {
-  return /no|nada|listo|entendido|todo claro|perfecto|ok|dale/i.test(text) && text.length < 30
-}
-
-function detectNextStepIntent(text: string) {
-  return /siguiente paso|avanzar|agendar|inscribir|sí|si\b|dale|ok|listo|perfecto|enlace|link/i.test(text) && text.length < 60
-}
-
-function extractPossibleName(text: string) {
-  const cleaned = text
-    .replace(/mi nombre es|soy|me llamo/gi, '')
-    .replace(/[.,!?]/g, ' ')
-    .trim()
-  if (!cleaned) return null
-
-  const beforeEmail = cleaned.split('@')[0]?.trim() || cleaned
-  const possibleName = beforeEmail
-    .split(/\s+/)
-    .filter((part) => /^[a-záéíóúñ]+$/i.test(part))
-    .slice(0, 3)
-    .join(' ')
-    .trim()
-
-  return looksLikeName(possibleName) ? possibleName : null
-}
-
 function hasLeadName(
   nombre: string | null | undefined,
   whatsapp: string | null | undefined
@@ -229,17 +99,8 @@ function hasLeadName(
   const value = String(nombre || '').trim()
   if (!value) return false
   if (value === String(whatsapp || '').trim()) return false
-  return looksLikeName(value)
-}
-
-function hasLeadEmail(email: string | null | undefined) {
-  return looksLikeEmail(String(email || '').trim())
-}
-
-function hasLeadProgram(curso: string | null | undefined) {
-  const value = String(curso || '').trim().toLowerCase()
-  if (!value) return false
-  if (value === 'whatsapp - instituto windsor') return false
+  if (value.length < 2) return false
+  if (/@/.test(value)) return false
   return true
 }
 
