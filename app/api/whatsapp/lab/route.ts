@@ -28,13 +28,13 @@ const NEXT_STEP_LABEL: Record<string, string> = {
   seguimiento: 'Retomar interés',
 }
 
-async function queryRAG(question: string): Promise<string> {
+async function queryRAG(question: string, matchCount = 5): Promise<string> {
   try {
     const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'https://crm.windsor.edu.mx'}/api/rag/query`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question }),
-      signal: AbortSignal.timeout(8000),
+      body: JSON.stringify({ question, match_count: matchCount }),
+      signal: AbortSignal.timeout(10000),
     })
     if (!res.ok) return ''
     const data = await res.json()
@@ -42,6 +42,12 @@ async function queryRAG(question: string): Promise<string> {
   } catch {
     return ''
   }
+}
+
+const BROAD_CATEGORIES = ['licenciaturas', 'maestrías', 'maestrias', 'diplomados', 'programas', 'oferta']
+function isBroadCategory(programa: string): boolean {
+  const lower = programa.toLowerCase()
+  return BROAD_CATEGORIES.some(c => lower.includes(c))
 }
 
 export async function POST(request: Request) {
@@ -66,11 +72,15 @@ export async function POST(request: Request) {
 
     // Always query RAG when we know the program, or during info/dudas phases
     let ragContext = ''
-    if (programaForRag || fase === 'info_enviada' || fase === 'dudas') {
+    const shouldQueryRag = programaForRag || fase === 'info_enviada' || fase === 'dudas'
+    if (shouldQueryRag) {
+      const broad = programaForRag ? isBroadCategory(programaForRag) : false
       const question = programaForRag
-        ? `${programaForRag} en Instituto Windsor: costos, horarios, duración, niveles, proceso de inscripción`
+        ? broad
+          ? `Lista completa de ${programaForRag} disponibles en Instituto Windsor con costos y duración`
+          : `${programaForRag} en Instituto Windsor: costos, horarios, duración, niveles, proceso de inscripción`
         : userMessage
-      ragContext = await queryRAG(question)
+      ragContext = await queryRAG(question, broad ? 12 : 5)
     }
 
     const leadContext = [

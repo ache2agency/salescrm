@@ -1,13 +1,18 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
+type DocumentMatch = {
+  contenido: string
+}
+
 export async function POST(req: Request) {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
-  const { question } = await req.json()
+  const { question, match_count } = await req.json()
   if (!question) return NextResponse.json({ error: 'El campo question es obligatorio' }, { status: 400 })
+  const matchCount = typeof match_count === 'number' ? Math.min(match_count, 20) : 5
 
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY
 
@@ -20,8 +25,8 @@ export async function POST(req: Request) {
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${OPENAI_API_KEY}` },
     body: JSON.stringify({ model: 'text-embedding-ada-002', input: question }),
     signal: embController.signal,
-  }).catch((e: any) => {
-    if (e?.name === 'AbortError') {
+  }).catch((e: unknown) => {
+    if (e instanceof Error && e.name === 'AbortError') {
       throw new Error('Timeout llamando a OpenAI embeddings (query)')
     }
     throw e
@@ -34,7 +39,7 @@ export async function POST(req: Request) {
   // Buscar documentos similares con cliente de service role
   const { data: matches, error } = await supabase.rpc('match_documents', {
     query_embedding: embedding,
-    match_count: 3
+    match_count: matchCount
   })
 
   if (error) {
@@ -48,7 +53,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ answer: 'No encontré información relevante.', context: '', matches: [] })
   }
 
-  const context = matches.map((m: any) => m.contenido).join('\n\n')
+  const context = (matches as DocumentMatch[]).map((m) => m.contenido).join('\n\n')
 
   // Responder con GPT
   const chatController = new AbortController()
@@ -60,13 +65,25 @@ export async function POST(req: Request) {
     body: JSON.stringify({
       model: 'gpt-4o',
       messages: [
-        { role: 'system', content: `Eres el asistente de Instituto Windsor. Responde basándote en este contexto:\n\n${context}` },
+        {
+          role: 'system',
+          content: `Eres el asistente de Instituto Windsor. Responde basándote solo en este contexto:\n\n${context}\n\nReglas de formato:
+- Responde en español.
+- Usa formato claro tipo WhatsApp.
+- Empieza con una frase breve de contexto.
+- Luego organiza la respuesta en bloques cortos o viñetas.
+- Si hay costos, horarios, duración, modalidad o requisitos, sepáralos en líneas distintas.
+- Evita párrafos largos.
+- No inventes información que no esté en el contexto.
+- Si falta un dato exacto, dilo con claridad.
+- Mantén la respuesta fácil de leer desde celular.`,
+        },
         { role: 'user', content: question }
       ]
     }),
     signal: chatController.signal,
-  }).catch((e: any) => {
-    if (e?.name === 'AbortError') {
+  }).catch((e: unknown) => {
+    if (e instanceof Error && e.name === 'AbortError') {
       throw new Error('Timeout llamando a OpenAI chat (query)')
     }
     throw e
@@ -77,4 +94,3 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ answer, context, matches })
 }
-
