@@ -467,12 +467,7 @@ const buildLabBotReply = ({ scenario, state, message }) => {
     nextState.fase = "correo";
     nextState.nextStep = "Capturar correo";
     reply = `Perfecto. Para continuar con *${normalizedProgram}*, ¿me compartes tu correo, por favor?`;
-    return {
-      reply,
-      nextState,
-      queryPrompt: buildLabKnowledgeQuestion(normalizedProgram, "general"),
-      fallbackReply: reply,
-    };
+    return { reply, nextState };
   }
 
   if (!state.email) {
@@ -559,10 +554,17 @@ const buildLabBotReply = ({ scenario, state, message }) => {
     };
   }
 
+  if (/siguiente paso|agendar|inscribir|inscripci[oó]n|proceso/.test(lower)) {
+    nextState.fase = "cerrado";
+    nextState.nextStep = "Cerrar proceso";
+    reply = `Perfecto. El siguiente paso es agendar tu cita o iniciar tu proceso de inscripción en *${activeProgram}*. Puedes hacerlo aquí: ${AGENDAR_LINK}`;
+    return { reply, nextState };
+  }
+
   if (/si|sí|quiero|ok|dale|perfecto/.test(lower)) {
     nextState.fase = "accion";
     nextState.nextStep = "Ofrecer siguiente paso";
-    reply = `Perfecto. Para *${activeProgram}*, puedo ayudarte con *costos*, *horarios* o con el *siguiente paso* de tu proceso en Instituto Windsor.`;
+    reply = `Perfecto. Para continuar con *${activeProgram}*, el siguiente paso es agendar tu cita. Puedes hacerlo aquí: ${AGENDAR_LINK}`;
     return { reply, nextState };
   }
 
