@@ -4,13 +4,31 @@ export const maxDuration = 60
 
 const AGENDAR_LINK = 'https://crm.windsor.edu.mx/agendar/hola@windsor.edu.mx'
 
+// Flujo correcto:
+// saludo → nombre → programa (muestra catálogo) → info_enviada (info detallada) → correo → accion (CTA)
+
 const FASE_INSTRUCCION: Record<string, string> = {
   saludo: 'Saluda brevemente y pide el nombre del prospecto.',
-  programa: 'Ya tienes el nombre. Pregunta qué programa le interesa de forma natural.',
-  correo: 'Pide el correo brevemente. Si el prospecto dice que no tiene o no quiere darlo, avanza de inmediato a info_enviada y comparte la información del programa sin insistir en el correo.',
-  info_enviada: 'COMPARTE AHORA la información del programa usando la BASE DE CONOCIMIENTO: costos, horarios, duración y proceso de inscripción. No preguntes si quiere la info — dala directamente. Al final pregunta si tiene alguna duda.',
-  dudas: 'Responde la duda usando la BASE DE CONOCIMIENTO con datos concretos (precios, horarios, etc.). Cuando no haya más dudas, invita al siguiente paso.',
-  accion: `El prospecto ya tiene la info. Invítalo al siguiente paso concreto: para inglés ofrece clase de prueba gratuita, para otros programas ofrece asesoría o inscripción. Da este link: ${AGENDAR_LINK}`,
+
+  programa: `Ya tienes el nombre. Ahora muestra TODA la oferta educativa disponible consultando la BASE DE CONOCIMIENTO.
+Si el prospecto ya mencionó una categoría (ej: licenciaturas), lista TODOS los programas de esa categoría con sus nombres reales.
+Si no mencionó nada específico, lista toda la oferta educativa con los nombres reales de cada programa.
+No hagas preguntas todavía — primero da la lista completa, luego pregunta cuál le interesa.`,
+
+  info_enviada: `El prospecto eligió un programa. Da TODA la información relevante de ese programa usando la BASE DE CONOCIMIENTO:
+duración, costos (inscripción y mensualidad), horarios disponibles, modalidad, certificaciones, campo laboral o siguiente paso.
+No preguntes si quiere info — dala completa. Al final pregunta si tiene alguna duda o si quiere avanzar.`,
+
+  dudas: 'Responde la duda con datos concretos de la BASE (costos, horarios, requisitos, etc.). Cuando no haya más dudas, pide el correo para dar seguimiento.',
+
+  correo: `Ya diste la información completa del programa. Pide el correo brevemente para dar seguimiento personalizado.
+Si no lo tiene o no quiere darlo, avanza de todas formas a accion.`,
+
+  accion: `Invita al prospecto al siguiente paso concreto.
+Para inglés (niños/adultos): agenda una clase de prueba gratuita → ${AGENDAR_LINK}
+Para otros programas: agenda una asesoría o inscripción → ${AGENDAR_LINK}
+Sé directo y entusiasta.`,
+
   cerrado: 'La conversación está cerrada. Si vuelve a escribir, pregunta si puedes ayudarle en algo más.',
   perdido: 'El prospecto no estaba interesado. Si vuelve a escribir, responde con amabilidad.',
   seguimiento: 'Retoma la conversación de forma amable y recuérdale el siguiente paso.',
@@ -18,10 +36,10 @@ const FASE_INSTRUCCION: Record<string, string> = {
 
 const NEXT_STEP_LABEL: Record<string, string> = {
   saludo: 'Capturar nombre',
-  programa: 'Identificar programa de interés',
-  correo: 'Capturar correo',
+  programa: 'Mostrar catálogo y elegir programa',
   info_enviada: 'Resolver dudas',
-  dudas: 'Llevar al siguiente paso',
+  dudas: 'Capturar correo',
+  correo: 'Capturar correo',
   accion: 'Cerrar proceso',
   cerrado: 'Conversación cerrada',
   perdido: 'Prospecto perdido',
@@ -44,10 +62,47 @@ async function queryRAG(question: string, matchCount = 5): Promise<string> {
   }
 }
 
-const BROAD_CATEGORIES = ['licenciaturas', 'maestrías', 'maestrias', 'diplomados', 'programas', 'oferta']
-function isBroadCategory(programa: string): boolean {
-  const lower = programa.toLowerCase()
+const BROAD_CATEGORIES = ['licenciaturas', 'maestrías', 'maestrias', 'diplomados', 'programas', 'oferta', 'lics', 'maes', 'dipl']
+function isBroadCategory(texto: string): boolean {
+  const lower = texto.toLowerCase()
   return BROAD_CATEGORIES.some(c => lower.includes(c))
+}
+
+function buildRAGQuestion(fase: string, programa: string | null, userMessage: string): { question: string; matchCount: number } {
+  // En fase programa: mostrar catálogo
+  if (fase === 'programa') {
+    if (programa && isBroadCategory(programa)) {
+      return {
+        question: `Lista completa de ${programa} disponibles en Instituto Windsor: nombres, duración y costos`,
+        matchCount: 15,
+      }
+    }
+    return {
+      question: 'Lista completa de toda la oferta educativa del Instituto Windsor: todos los programas disponibles con nombres reales',
+      matchCount: 15,
+    }
+  }
+
+  // Para programa específico
+  if (programa) {
+    // Normalizar abreviaciones comunes
+    let programaNorm = programa
+    if (/^adulto/i.test(programa)) programaNorm = 'Inglés para adultos'
+    if (/^ni[ñn]/i.test(programa)) programaNorm = 'Inglés para niños'
+
+    if (isBroadCategory(programaNorm)) {
+      return {
+        question: `Lista completa de ${programaNorm} en Instituto Windsor con nombres, costos y duración`,
+        matchCount: 15,
+      }
+    }
+    return {
+      question: `${programaNorm} en Instituto Windsor: costos, horarios, duración, modalidad, certificaciones, campo laboral, proceso de inscripción`,
+      matchCount: 10,
+    }
+  }
+
+  return { question: userMessage, matchCount: 5 }
 }
 
 export async function POST(request: Request) {
@@ -63,24 +118,12 @@ export async function POST(request: Request) {
     const email = state?.email || null
     const programa = state?.programa || null
 
-    // Build a descriptive program name for RAG (e.g. "adultos" → "Inglés para adultos")
-    const programaForRag = programa
-      ? (/adulto/i.test(programa) ? 'Inglés para adultos'
-        : /ni[ñn]/i.test(programa) ? 'Inglés para niños'
-        : programa)
-      : null
-
-    // Always query RAG when we know the program, or during info/dudas phases
+    // Consultar RAG en fases donde se necesita contenido
     let ragContext = ''
-    const shouldQueryRag = programaForRag || fase === 'info_enviada' || fase === 'dudas'
-    if (shouldQueryRag) {
-      const broad = programaForRag ? isBroadCategory(programaForRag) : false
-      const question = programaForRag
-        ? broad
-          ? `Lista completa de ${programaForRag} disponibles en Instituto Windsor con costos y duración`
-          : `${programaForRag} en Instituto Windsor: costos, horarios, duración, niveles, proceso de inscripción`
-        : userMessage
-      ragContext = await queryRAG(question, broad ? 12 : 8)
+    const needsRAG = ['programa', 'info_enviada', 'dudas', 'correo'].includes(fase) || programa
+    if (needsRAG) {
+      const { question, matchCount } = buildRAGQuestion(fase, programa, userMessage)
+      ragContext = await queryRAG(question, matchCount)
     }
 
     const leadContext = [
@@ -90,28 +133,30 @@ export async function POST(request: Request) {
       `Fase actual: ${fase}`,
     ].join('\n')
 
-    const systemPrompt = `Eres un asesor comercial de Instituto Windsor (escuela en México) que atiende prospectos por WhatsApp. Tu objetivo es generar confianza y motivar al prospecto a inscribirse. Hablas como una persona real: amable, seguro y con conocimiento del programa.
+    const systemPrompt = `Eres un asesor comercial de Instituto Windsor (escuela en México) que atiende prospectos por WhatsApp. Tu objetivo es generar confianza y llevar al prospecto a inscribirse. Hablas como una persona real: amable, directo y con conocimiento del programa.
 
-OFERTA EDUCATIVA:
-- Inglés para niños (4–12 años) → clase de prueba gratuita
-- Inglés para adultos (12 años en adelante) → clase de prueba gratuita
-- Bachillerato, Licenciaturas, Maestrías, Diplomados y más → asesoría o inscripción
+FLUJO DE CONVERSACIÓN:
+1. Capturas el nombre
+2. Muestras la oferta educativa completa de la BASE y preguntas cuál le interesa
+3. Das información detallada del programa elegido (costos, horarios, todo)
+4. Pides el correo para dar seguimiento
+5. Invitas al siguiente paso con link
 
 DATOS ACTUALES DEL PROSPECTO:
 ${leadContext}
 
 QUÉ HACER AHORA: ${FASE_INSTRUCCION[fase] ?? 'Responde de forma natural y útil.'}
 
-${ragContext ? `INFORMACIÓN DEL PROGRAMA (usa TODO lo relevante para convencer al prospecto):\n${ragContext}\n` : ''}
+${ragContext ? `BASE DE CONOCIMIENTO — usa esta información en tu respuesta:\n${ragContext}\n` : ''}
 REGLAS:
-- Fases de captura (saludo, programa, correo): respuestas cortas, máximo 2 oraciones.
-- Fases de información (info_enviada, dudas): da TODA la información útil del programa. Incluye duración, costos, horarios, certificaciones, salidas profesionales, modalidad — todo lo que genere confianza. No recortes ni resumas en exceso.
+- En fases de captura (saludo, correo): respuestas cortas.
+- En fases de contenido (programa, info_enviada, dudas): usa TODO lo que hay en la BASE. No recortes información importante.
+- NUNCA pidas correo antes de haber dado información del programa.
 - No repitas datos que ya tienes del prospecto.
-- Si el prospecto da nombre + programa + correo juntos, captúralos todos de una vez.
-- Si pide hablar con una persona real, pon requestedHuman: true.
-- Si no hay info en la BASE, dilo con honestidad y ofrece el link de agendamiento.
-- El campo "siguienteFase": saludo, programa, correo, info_enviada, dudas, accion, cerrado, perdido o seguimiento.
-- "programa": nombre que usó el prospecto, o null.
+- Si el prospecto da nombre + programa + correo juntos, captúralos todos.
+- Si pide hablar con una persona, pon requestedHuman: true.
+- "siguienteFase" debe ser: saludo, programa, info_enviada, dudas, correo, accion, cerrado, perdido o seguimiento.
+- "programa": nombre exacto que usó el prospecto, o null si no cambió.
 - "nombre": nombre dado en este mensaje, o null.
 - "email": correo dado en este mensaje, o null.
 
@@ -125,7 +170,7 @@ Responde ÚNICAMENTE con JSON válido:
   "requestedHuman": false
 }`
 
-    const history = Array.isArray(messages) ? messages.slice(-8) : []
+    const history = Array.isArray(messages) ? messages.slice(-10) : []
     const chatMessages = [
       { role: 'system', content: systemPrompt },
       ...history.map((m: { role: string; content: string }) => ({ role: m.role, content: m.content })),
@@ -141,8 +186,8 @@ Responde ÚNICAMENTE con JSON válido:
       body: JSON.stringify({
         model: 'gpt-4o',
         messages: chatMessages,
-        temperature: 0.6,
-        max_tokens: 700,
+        temperature: 0.5,
+        max_tokens: 800,
         response_format: { type: 'json_object' },
       }),
       signal: AbortSignal.timeout(15000),
