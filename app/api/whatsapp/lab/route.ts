@@ -1,8 +1,29 @@
+import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
 export const maxDuration = 60
 
 const AGENDAR_LINK = 'https://crm.windsor.edu.mx/agendar/hola@windsor.edu.mx'
+
+async function getBotPrompt(): Promise<string> {
+  try {
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+    const { data } = await supabase
+      .from('whatsapp_flows')
+      .select('config')
+      .eq('activo', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    const prompt = data?.config?.bot_prompt
+    return typeof prompt === 'string' && prompt.trim() ? prompt.trim() : ''
+  } catch {
+    return ''
+  }
+}
 
 // Flujo correcto:
 // saludo → nombre → programa (muestra catálogo) → info_enviada (info detallada) → correo → accion (CTA)
@@ -133,14 +154,21 @@ export async function POST(request: Request) {
       `Fase actual: ${fase}`,
     ].join('\n')
 
-    const systemPrompt = `Eres un asesor comercial de Instituto Windsor (escuela en México) que atiende prospectos por WhatsApp. Tu objetivo es generar confianza y llevar al prospecto a inscribirse. Hablas como una persona real: amable, directo y con conocimiento del programa.
+    const savedBotPrompt = await getBotPrompt()
 
-FLUJO DE CONVERSACIÓN:
-1. Capturas el nombre
-2. Muestras la oferta educativa completa de la BASE y preguntas cuál le interesa
-3. Das información detallada del programa elegido (costos, horarios, todo)
-4. Pides el correo para dar seguimiento
-5. Invitas al siguiente paso con link
+    const baseInstructions = savedBotPrompt ||
+      `Eres un asesor comercial de Instituto Windsor (escuela en México) que atiende prospectos por WhatsApp.
+Tu objetivo es generar confianza y llevar al prospecto a inscribirse.
+Hablas como una persona real: amable, directo y con conocimiento del programa.
+
+FLUJO:
+1. Captura el nombre
+2. Muestra toda la oferta educativa de la BASE y pregunta cuál le interesa
+3. Da información detallada del programa elegido (costos, horarios, modalidad, certificaciones)
+4. Pide el correo para dar seguimiento
+5. Invita al siguiente paso con link`
+
+    const systemPrompt = `${baseInstructions}
 
 DATOS ACTUALES DEL PROSPECTO:
 ${leadContext}
@@ -148,15 +176,15 @@ ${leadContext}
 QUÉ HACER AHORA: ${FASE_INSTRUCCION[fase] ?? 'Responde de forma natural y útil.'}
 
 ${ragContext ? `BASE DE CONOCIMIENTO — usa esta información en tu respuesta:\n${ragContext}\n` : ''}
-REGLAS:
+REGLAS TÉCNICAS:
 - En fases de captura (saludo, correo): respuestas cortas.
-- En fases de contenido (programa, info_enviada, dudas): usa TODO lo que hay en la BASE. No recortes información importante.
+- En fases de contenido (programa, info_enviada, dudas): usa TODO lo que hay en la BASE. No recortes.
 - NUNCA pidas correo antes de haber dado información del programa.
 - No repitas datos que ya tienes del prospecto.
 - Si el prospecto da nombre + programa + correo juntos, captúralos todos.
 - Si pide hablar con una persona, pon requestedHuman: true.
-- "siguienteFase" debe ser: saludo, programa, info_enviada, dudas, correo, accion, cerrado, perdido o seguimiento.
-- "programa": nombre exacto que usó el prospecto, o null si no cambió.
+- "siguienteFase": saludo, programa, info_enviada, dudas, correo, accion, cerrado, perdido o seguimiento.
+- "programa": nombre que usó el prospecto, o null.
 - "nombre": nombre dado en este mensaje, o null.
 - "email": correo dado en este mensaje, o null.
 

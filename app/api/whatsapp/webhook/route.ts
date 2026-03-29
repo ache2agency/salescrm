@@ -245,6 +245,23 @@ type GptBotResult = {
   noInterest: boolean
 }
 
+async function getBotPrompt(): Promise<string> {
+  try {
+    const supabase = createServiceRoleClient()
+    const { data } = await supabase
+      .from('whatsapp_flows')
+      .select('config')
+      .eq('activo', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    const prompt = data?.config?.bot_prompt
+    return typeof prompt === 'string' && prompt.trim() ? prompt.trim() : ''
+  } catch {
+    return ''
+  }
+}
+
 async function askGPT(params: {
   fase: string
   leadData: { nombre?: string | null; email?: string | null; curso?: string | null }
@@ -255,16 +272,23 @@ async function askGPT(params: {
   if (!OPENAI_API_KEY) throw new Error('No OPENAI_API_KEY')
 
   const faseInstruccion: Record<string, string> = {
-    saludo: 'Pide el nombre del prospecto si aún no lo tienes. Si ya lo tienes, avanza a programa.',
-    programa: 'Ya tienes el nombre. Identifica qué programa le interesa y avanza a correo.',
-    correo: 'Ya tienes nombre y programa. Pide el correo de forma natural para enviarle información. Si no lo da, avanza de igual forma a info_enviada.',
-    info_enviada: 'Envía un resumen breve del programa usando la información de la base de conocimiento. Luego pregunta si tiene alguna duda.',
-    dudas: 'Responde la duda del prospecto usando la información de la base de conocimiento. Cuando no haya más dudas invita al siguiente paso (avanza a accion).',
-    accion: 'Ofrece el siguiente paso concreto según el programa: clase de prueba (inglés niños/adultos) o asesoría/examen/inscripción (licenciaturas/maestrías/diplomados). Si acepta, incluye el link y pon siguienteFase: cerrado.',
-    seguimiento: 'Retoma la conversación de forma amable y recuérdale el siguiente paso.',
+    saludo: 'Pide el nombre del prospecto si aún no lo tienes.',
+    programa: 'Ya tienes el nombre. Muestra la oferta educativa de la BASE y pregunta cuál le interesa.',
+    info_enviada: 'Da información completa del programa: costos, horarios, duración, modalidad. Luego pregunta si tiene dudas.',
+    dudas: 'Responde la duda con datos de la BASE. Cuando no haya más dudas, pide el correo.',
+    correo: 'Pide el correo brevemente. Si no lo da, avanza a accion.',
+    accion: `Ofrece el siguiente paso: clase de prueba (inglés) o asesoría/inscripción (otros programas). Link: ${AGENDAR_LINK}`,
+    seguimiento: 'Retoma la conversación y recuérdale el siguiente paso.',
     cerrado: 'La conversación está cerrada. Si escribe, pregunta si puedes ayudarle en algo más.',
     perdido: 'El prospecto no estaba interesado. Si vuelve a escribir, responde con amabilidad.',
   }
+
+  const savedBotPrompt = await getBotPrompt()
+
+  const baseInstructions = savedBotPrompt ||
+    `Eres un asesor comercial de Instituto Windsor (escuela en México) que atiende prospectos por WhatsApp.
+Tu objetivo es generar confianza y llevar al prospecto a inscribirse.
+Tono: amable, directo, como una persona real — no un robot.`
 
   const leadContext = [
     `Nombre: ${params.leadData.nombre || 'no capturado aún'}`,
@@ -272,37 +296,31 @@ async function askGPT(params: {
     `Programa de interés: ${params.leadData.curso || 'no identificado aún'}`,
   ].join('\n')
 
-  const systemPrompt = `Eres un asistente comercial de Instituto Windsor (escuela en México) que atiende prospectos por WhatsApp. Tu tono es amable, breve y cercano — como una persona real, no un robot.
-
-OFERTA EDUCATIVA:
-- Inglés para niños (4-12 años) → clase de prueba gratuita → ${AGENDAR_LINK}
-- Inglés para adultos (12 años en adelante) → clase de prueba gratuita → ${AGENDAR_LINK}
-- Bachillerato, Licenciaturas, Maestrías, Diplomados y otros programas académicos → asesoría, examen de ubicación o inscripción → ${AGENDAR_LINK}
-- Si el prospecto menciona un programa específico (ej: marketing, turismo, enfermería, etc.), búscalo en la BASE DE CONOCIMIENTO para dar información precisa.
+  const systemPrompt = `${baseInstructions}
 
 DATOS ACTUALES DEL PROSPECTO:
 ${leadContext}
 
 FASE ACTUAL: ${params.fase}
-QUÉ HACER EN ESTA FASE: ${faseInstruccion[params.fase] ?? 'Responde de forma natural y útil.'}
+QUÉ HACER AHORA: ${faseInstruccion[params.fase] ?? 'Responde de forma natural y útil.'}
 
-${params.ragContext ? `INFORMACIÓN DE LA BASE DE CONOCIMIENTO (úsala si es relevante):\n${params.ragContext}\n` : ''}
-REGLAS IMPORTANTES:
-- Máximo 3 oraciones por mensaje. Nada de listas largas ni párrafos.
-- Si el prospecto da nombre + programa + correo en un mismo mensaje, captúralos todos de una vez.
+${params.ragContext ? `BASE DE CONOCIMIENTO (úsala si es relevante):\n${params.ragContext}\n` : ''}
+REGLAS:
+- Mensajes cortos en fases de captura (saludo, correo). Más detallado en info_enviada y dudas.
 - No vuelvas a pedir datos que ya tienes.
-- Si pide hablar con una persona o asesor, pon requestedHuman: true.
-- Si claramente no le interesa (dice "no gracias", "ya no", "baja"), pon noInterest: true.
-- El campo "programa" debe ser el nombre del programa tal como lo mencionó el prospecto (ej: "Marketing", "Turismo", "Inglés niños"), o null si no se detectó.
-- El campo "siguienteFase" solo acepta: saludo, programa, correo, info_enviada, dudas, accion, cerrado, perdido, seguimiento.
+- Si da nombre + programa + correo juntos, captúralos todos.
+- Si pide hablar con una persona, pon requestedHuman: true.
+- Si claramente no le interesa, pon noInterest: true.
+- "programa": nombre que usó el prospecto, o null.
+- "siguienteFase": saludo, programa, info_enviada, dudas, correo, accion, cerrado, perdido, seguimiento.
 
-Responde ÚNICAMENTE con JSON válido, sin texto adicional:
+Responde ÚNICAMENTE con JSON válido:
 {
   "respuesta": "mensaje que se enviará al prospecto por WhatsApp",
   "siguienteFase": "fase_siguiente",
-  "nombre": "nombre detectado en el mensaje o null",
-  "email": "email detectado en el mensaje o null",
-  "programa": "programa detectado o null",
+  "nombre": null,
+  "email": null,
+  "programa": null,
   "requestedHuman": false,
   "noInterest": false
 }`
