@@ -313,10 +313,11 @@ async function askGPT(params: {
   const faseInstruccion: Record<string, string> = {
     saludo: 'Saluda brevemente y pide el nombre del prospecto.',
 
-    programa: `Ya tienes el nombre. Muestra TODA la oferta educativa de la BASE DE CONOCIMIENTO.
-Si el prospecto ya mencionó una categoría (ej: licenciaturas), lista TODOS los de esa categoría con nombres reales.
-Si no mencionó nada, lista toda la oferta educativa con nombres reales.
-Primero da la lista completa, luego pregunta cuál le interesa.`,
+    programa: `Ya tienes el nombre. Lista TODOS los programas de la BASE DE CONOCIMIENTO exactamente como aparecen, sin omitir ninguno y sin inventar.
+Si el prospecto mencionó una categoría (ej: licenciaturas), lista solo los de esa categoría.
+Si no mencionó nada, muestra toda la oferta organizada por categoría.
+No resumas, no parafrasees — usa los nombres reales de la BASE.
+Al final pregunta cuál le interesa.`,
 
     correo: `El prospecto eligió un programa. ANTES de dar información del programa, pide su correo electrónico brevemente para dar seguimiento personalizado.
 Si no lo quiere dar, da una respuesta evasiva, o dice que no tiene, avanza de todas formas a info_enviada.
@@ -713,7 +714,11 @@ export async function POST(request: Request) {
         })
         if (ragRes.ok) {
           const ragData = await ragRes.json()
-          if (typeof ragData?.answer === 'string') ragContext = ragData.answer
+          // Para programa e info_enviada usamos contexto crudo para evitar doble resumen
+          const useRaw = phase === 'programa' || phase === 'info_enviada'
+          ragContext = useRaw
+            ? (typeof ragData?.context === 'string' ? ragData.context : ragData?.answer || '')
+            : (ragData?.answer || '')
         }
       } catch { /* continuar sin RAG */ }
 

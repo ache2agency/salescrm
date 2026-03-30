@@ -69,10 +69,11 @@ async function getBotPrompt(): Promise<string> {
 const FASE_INSTRUCCION: Record<string, string> = {
   saludo: 'Saluda brevemente y pide el nombre del prospecto.',
 
-  programa: `Ya tienes el nombre. Muestra TODA la oferta educativa de la BASE DE CONOCIMIENTO.
-Si el prospecto ya mencionó una categoría (ej: licenciaturas), lista TODOS los de esa categoría con nombres reales.
-Si no mencionó nada, lista toda la oferta educativa con nombres reales.
-Primero da la lista completa, luego pregunta cuál le interesa.`,
+  programa: `Ya tienes el nombre. Lista TODOS los programas de la BASE DE CONOCIMIENTO exactamente como aparecen, sin omitir ninguno y sin inventar.
+Si el prospecto mencionó una categoría (ej: licenciaturas), lista solo los de esa categoría.
+Si no mencionó nada, muestra toda la oferta organizada por categoría.
+No resumas, no parafrasees — usa los nombres reales de la BASE.
+Al final pregunta cuál le interesa.`,
 
   correo: `El prospecto eligió un programa. ANTES de dar información del programa, pide su correo electrónico brevemente para dar seguimiento personalizado.
 Si no lo quiere dar, da una respuesta evasiva, o dice que no tiene, avanza de todas formas a info_enviada.
@@ -129,7 +130,7 @@ const NEXT_STEP_LABEL: Record<string, string> = {
   seguimiento: 'Retomar interés',
 }
 
-async function queryRAG(question: string, matchCount = 5): Promise<string> {
+async function queryRAG(question: string, matchCount = 5, rawContext = false): Promise<string> {
   try {
     const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'https://crm.windsor.edu.mx'}/api/rag/query`, {
       method: 'POST',
@@ -139,7 +140,8 @@ async function queryRAG(question: string, matchCount = 5): Promise<string> {
     })
     if (!res.ok) return ''
     const data = await res.json()
-    return data?.answer || ''
+    // rawContext: usa los chunks directamente sin pasar por el GPT del RAG
+    return rawContext ? (data?.context || data?.answer || '') : (data?.answer || '')
   } catch {
     return ''
   }
@@ -224,7 +226,10 @@ export async function POST(request: Request) {
     const needsRAG = ['programa', 'info_enviada', 'dudas', 'correo', 'asesor'].includes(fase) || programa
     if (needsRAG) {
       const { question, matchCount } = buildRAGQuestion(fase, programa, userMessage)
-      ragContext = await queryRAG(question, matchCount)
+      // Para programa e info_enviada usamos el contexto crudo (sin pasar por el GPT del RAG)
+      // para que el bot liste los programas exactamente como están en la BASE, sin doble resumen
+      const useRaw = fase === 'programa' || fase === 'info_enviada'
+      ragContext = await queryRAG(question, matchCount, useRaw)
     }
 
     const leadContext = [
