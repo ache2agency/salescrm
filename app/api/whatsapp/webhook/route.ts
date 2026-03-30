@@ -695,17 +695,41 @@ export async function POST(request: Request) {
     if (conversacionIdOuter && waNumber) {
       const supabase = createServiceRoleClient()
 
-      // Contexto RAG: siempre lo buscamos para que GPT pueda usarlo en cualquier fase
+      // Fase programa: retornar catálogo directo de la BASE sin pasar por GPT
+      if (phase === 'programa') {
+        try {
+          const ragUrl = new URL('/api/rag/query', new URL(request.url).origin)
+          const ragRes = await fetch(ragUrl.toString(), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              question: 'Lista completa de toda la oferta educativa del Instituto Windsor con nombres reales',
+              match_count: 15,
+            }),
+            signal: AbortSignal.timeout(8000),
+          })
+          if (ragRes.ok) {
+            const ragData = await ragRes.json()
+            const catalogo = typeof ragData?.context === 'string' ? ragData.context : ragData?.answer || ''
+            const nombre = leadSnapshot?.nombre
+            const botMessage = catalogo
+              ? `${nombre ? `${nombre}, ` : ''}aquí está nuestra oferta educativa:\n\n${catalogo}\n\n¿Cuál te interesa?`
+              : '¿Qué tipo de programa te interesa? Tenemos licenciaturas, maestrías, diplomados y cursos de idiomas.'
+            await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, botMessage, 'correo')
+            return buildProviderResponse(provider, botMessage, waNumber)
+          }
+        } catch { /* continuar con GPT si falla RAG */ }
+      }
+
+      // Contexto RAG para otras fases
       let ragContext = ''
       try {
         const ragUrl = new URL('/api/rag/query', new URL(request.url).origin)
-        const isInfoPhase = ['programa', 'info_enviada', 'dudas', 'correo'].includes(phase)
+        const isInfoPhase = ['info_enviada', 'dudas', 'correo'].includes(phase)
         const matchCount = isInfoPhase ? 15 : 5
         const ragQuestion = isInfoPhase && leadSnapshot?.curso
           ? `${leadSnapshot.curso} en Instituto Windsor: costos, horarios, duración, modalidad, certificaciones, campo laboral`
-          : isInfoPhase
-            ? 'Lista completa de toda la oferta educativa del Instituto Windsor con nombres reales, costos y duración'
-            : (leadSummary ? `${leadSummary}\n\n${originalText}` : originalText)
+          : (leadSummary ? `${leadSummary}\n\n${originalText}` : originalText)
         const ragRes = await fetch(ragUrl.toString(), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -714,9 +738,8 @@ export async function POST(request: Request) {
         })
         if (ragRes.ok) {
           const ragData = await ragRes.json()
-          // Para programa e info_enviada usamos contexto crudo para evitar doble resumen
-          const useRaw = phase === 'programa' || phase === 'info_enviada'
-          ragContext = useRaw
+          // Para info_enviada usamos contexto crudo para evitar doble resumen
+          ragContext = phase === 'info_enviada'
             ? (typeof ragData?.context === 'string' ? ragData.context : ragData?.answer || '')
             : (ragData?.answer || '')
         }

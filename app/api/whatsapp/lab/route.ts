@@ -221,14 +221,28 @@ export async function POST(request: Request) {
       })
     }
 
+    // Fase programa: retornar catálogo directo de la BASE sin pasar por GPT
+    if (fase === 'programa') {
+      const { question, matchCount } = buildRAGQuestion('programa', programa, userMessage)
+      const catalogoRaw = await queryRAG(question, matchCount, true)
+      const respuesta = catalogoRaw
+        ? `${nombre ? `${nombre}, ` : ''}aquí está nuestra oferta educativa:\n\n${catalogoRaw}\n\n¿Cuál te interesa?`
+        : 'Contamos con licenciaturas, maestrías, diplomados y cursos de idiomas. ¿Cuál te interesa?'
+      return NextResponse.json({
+        respuesta,
+        siguienteFase: 'correo',
+        nextStep: NEXT_STEP_LABEL['correo'],
+        nombre: null, email: null, programa: null, telefono: null, requestedHuman: false,
+      })
+    }
+
     // Consultar RAG en fases donde se necesita contenido
     let ragContext = ''
-    const needsRAG = ['programa', 'info_enviada', 'dudas', 'correo', 'asesor'].includes(fase) || programa
+    const needsRAG = ['info_enviada', 'dudas', 'correo', 'asesor'].includes(fase) || programa
     if (needsRAG) {
       const { question, matchCount } = buildRAGQuestion(fase, programa, userMessage)
-      // Para programa e info_enviada usamos el contexto crudo (sin pasar por el GPT del RAG)
-      // para que el bot liste los programas exactamente como están en la BASE, sin doble resumen
-      const useRaw = fase === 'programa' || fase === 'info_enviada'
+      // Para info_enviada usamos contexto crudo para evitar doble resumen
+      const useRaw = fase === 'info_enviada'
       ragContext = await queryRAG(question, matchCount, useRaw)
     }
 
