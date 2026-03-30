@@ -824,6 +824,19 @@ export async function POST(request: Request) {
         await supabase.from('leads').update({ stage: newStage }).eq('id', leadId)
       }
 
+      // Si GPT avanza a programa, interceptar y devolver catálogo hardcodeado
+      if (gpt.siguienteFase === 'programa') {
+        const nombre = gpt.nombre || leadSnapshot?.nombre
+        const botMessage = nombre
+          ? `${nombre}, aquí está nuestra oferta educativa:\n\n${CATALOGO_OFERTA}`
+          : CATALOGO_OFERTA
+        if (gpt.nombre && leadId && !hasLeadName(leadSnapshot?.nombre, waNumber)) {
+          await supabase.from('leads').update({ nombre: gpt.nombre, stage: 'contactado' }).eq('id', leadId)
+        }
+        await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, botMessage, 'correo')
+        return buildProviderResponse(provider, botMessage, waNumber)
+      }
+
       // Mensajes hardcoded para fases específicas
       let botMessage = gpt.respuesta
       let nextFase = gpt.siguienteFase

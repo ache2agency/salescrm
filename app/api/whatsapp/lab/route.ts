@@ -402,6 +402,24 @@ Responde ÚNICAMENTE con JSON válido:
 
     const siguienteFase = result.siguienteFase || fase
 
+    // Si GPT quiere avanzar a programa, interceptar y devolver catálogo hardcodeado
+    if (siguienteFase === 'programa') {
+      const capturedNombre = result.nombre || nombre
+      const respuesta = capturedNombre
+        ? `${capturedNombre}, aquí está nuestra oferta educativa:\n\n${CATALOGO_OFERTA}`
+        : CATALOGO_OFERTA
+      return NextResponse.json({
+        respuesta,
+        siguienteFase: 'correo',
+        nextStep: NEXT_STEP_LABEL['correo'],
+        nombre: result.nombre || null,
+        email: result.email || null,
+        programa: result.programa || null,
+        telefono: result.telefono || null,
+        requestedHuman: result.requestedHuman || false,
+      })
+    }
+
     return NextResponse.json({
       respuesta: result.respuesta || '',
       siguienteFase,
