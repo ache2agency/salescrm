@@ -130,7 +130,7 @@ const NEXT_STEP_LABEL: Record<string, string> = {
   seguimiento: 'Retomar interés',
 }
 
-async function queryRAG(question: string, matchCount = 5, rawContext = false): Promise<string> {
+async function queryRAG(question: string, matchCount = 5, mode: 'answer' | 'context' | 'first_chunk' = 'answer'): Promise<string> {
   try {
     const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'https://crm.windsor.edu.mx'}/api/rag/query`, {
       method: 'POST',
@@ -140,8 +140,13 @@ async function queryRAG(question: string, matchCount = 5, rawContext = false): P
     })
     if (!res.ok) return ''
     const data = await res.json()
-    // rawContext: usa los chunks directamente sin pasar por el GPT del RAG
-    return rawContext ? (data?.context || data?.answer || '') : (data?.answer || '')
+    if (mode === 'first_chunk') {
+      const matches = data?.matches
+      if (Array.isArray(matches) && matches.length > 0) return (matches[0] as { contenido?: string }).contenido || ''
+      return data?.context || data?.answer || ''
+    }
+    if (mode === 'context') return data?.context || data?.answer || ''
+    return data?.answer || ''
   } catch {
     return ''
   }
@@ -222,11 +227,15 @@ export async function POST(request: Request) {
     }
 
     // Fase programa: retornar catálogo directo de la BASE sin pasar por GPT
+    // Usamos solo el primer chunk (más relevante) para evitar mezclar info de todos los programas
     if (fase === 'programa') {
-      const { question, matchCount } = buildRAGQuestion('programa', programa, userMessage)
-      const catalogoRaw = await queryRAG(question, matchCount, true)
-      const respuesta = catalogoRaw
-        ? `${nombre ? `${nombre}, ` : ''}aquí está nuestra oferta educativa:\n\n${catalogoRaw}\n\n¿Cuál te interesa?`
+      const catalogoChunk = await queryRAG(
+        'oferta educativa Instituto Windsor lista de programas',
+        1,
+        'first_chunk'
+      )
+      const respuesta = catalogoChunk
+        ? `${nombre ? `${nombre}, ` : ''}aquí está nuestra oferta educativa:\n\n${catalogoChunk}\n\n¿Cuál te interesa?`
         : 'Contamos con licenciaturas, maestrías, diplomados y cursos de idiomas. ¿Cuál te interesa?'
       return NextResponse.json({
         respuesta,
@@ -241,9 +250,9 @@ export async function POST(request: Request) {
     const needsRAG = ['info_enviada', 'dudas', 'correo', 'asesor'].includes(fase) || programa
     if (needsRAG) {
       const { question, matchCount } = buildRAGQuestion(fase, programa, userMessage)
-      // Para info_enviada usamos contexto crudo para evitar doble resumen
-      const useRaw = fase === 'info_enviada'
-      ragContext = await queryRAG(question, matchCount, useRaw)
+      // Para info_enviada usamos el primer chunk más relevante del programa específico
+      const mode = fase === 'info_enviada' ? 'first_chunk' : 'answer'
+      ragContext = await queryRAG(question, matchCount, mode)
     }
 
     const leadContext = [

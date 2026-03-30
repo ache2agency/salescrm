@@ -696,6 +696,7 @@ export async function POST(request: Request) {
       const supabase = createServiceRoleClient()
 
       // Fase programa: retornar catálogo directo de la BASE sin pasar por GPT
+      // Solo el primer chunk (más relevante = catálogo) para no mezclar info de todos los programas
       if (phase === 'programa') {
         try {
           const ragUrl = new URL('/api/rag/query', new URL(request.url).origin)
@@ -703,14 +704,17 @@ export async function POST(request: Request) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              question: 'Lista completa de toda la oferta educativa del Instituto Windsor con nombres reales',
-              match_count: 15,
+              question: 'oferta educativa Instituto Windsor lista de programas',
+              match_count: 1,
             }),
             signal: AbortSignal.timeout(8000),
           })
           if (ragRes.ok) {
             const ragData = await ragRes.json()
-            const catalogo = typeof ragData?.context === 'string' ? ragData.context : ragData?.answer || ''
+            const matches = ragData?.matches
+            const catalogo = Array.isArray(matches) && matches.length > 0
+              ? (matches[0] as { contenido?: string }).contenido || ''
+              : ragData?.answer || ''
             const nombre = leadSnapshot?.nombre
             const botMessage = catalogo
               ? `${nombre ? `${nombre}, ` : ''}aquí está nuestra oferta educativa:\n\n${catalogo}\n\n¿Cuál te interesa?`
