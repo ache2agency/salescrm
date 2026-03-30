@@ -235,12 +235,51 @@ async function buildProviderResponse(
 
 // ─── GPT-4o como cerebro del bot ─────────────────────────────────────────────
 
+const INSCRIPCION_LICS_MSG = `🔴PROCESO DE INSCRIPCIÓN LICENCIATURAS🔴
+
+Antes que nada, ¡felicidades por tomar acción en tu crecimiento profesional y personal! Estamos seguros que tomaste la decisión correcta. 🎉
+
+Para empezar tu proceso de inscripción vas a necesitar los siguientes archivos:
+
+📄 *Acta de nacimiento*
+Nombre del archivo: "Acta de nacimiento (tu nombre)"
+
+📄 *Certificado de bachillerato*
+Nombre del archivo: "Certificado de bachillerato (tu nombre)"
+
+📄 *Comprobante de pago*
+Nombre del archivo: "Comprobante de pago (tu nombre)"
+
+🏦 Información bancaria:
+https://drive.google.com/file/d/1Hj9rRk1zHMWGnG_CjF287W-hxY2AoTe9/view?usp=drivesdk
+
+🔵 ¿Ya tienes todos los documentos? Sigue estos pasos:
+
+1️⃣ Ingresa a https://www.windsor.edu.mx/solicitud-de-inscripcion y llena la "Solicitud de inscripción licenciaturas"
+
+2️⃣ Envíanos un mensaje por este medio cuando hayas terminado.
+
+¡Listo, ya eres parte de la familia Windsor! 🎉🎉🎉
+¡¡BIENVENID@!!`
+
+const CLASE_PRUEBA_MSG = `¡Me gustaría invitarte a una clase de prueba! 🎉
+
+Tendrás la oportunidad de conocer a tu profesor(a) y socializar con tus compañeros. La idea es que experimentes nuestro servicio antes de tomar una decisión.
+
+✅ *Completamente GRATUITA*
+
+👉 Agenda tu clase aquí:
+${AGENDAR_LINK}
+
+¿Te animas? 😊`
+
 type GptBotResult = {
   respuesta: string
   siguienteFase: string
   nombre: string | null
   email: string | null
   programa: string | null
+  telefono: string | null
   requestedHuman: boolean
   noInterest: boolean
 }
@@ -272,12 +311,45 @@ async function askGPT(params: {
   if (!OPENAI_API_KEY) throw new Error('No OPENAI_API_KEY')
 
   const faseInstruccion: Record<string, string> = {
-    saludo: 'Pide el nombre del prospecto si aún no lo tienes.',
-    programa: 'Ya tienes el nombre. Muestra la oferta educativa de la BASE y pregunta cuál le interesa.',
-    info_enviada: 'Da información completa del programa: costos, horarios, duración, modalidad. Luego pregunta si tiene dudas.',
-    dudas: 'Responde la duda con datos de la BASE. Cuando no haya más dudas, pide el correo.',
-    correo: 'Pide el correo brevemente. Si no lo da, avanza a accion.',
-    accion: `Ofrece el siguiente paso: clase de prueba (inglés) o asesoría/inscripción (otros programas). Link: ${AGENDAR_LINK}`,
+    saludo: 'Saluda brevemente y pide el nombre del prospecto.',
+
+    programa: `Ya tienes el nombre. Muestra TODA la oferta educativa de la BASE DE CONOCIMIENTO.
+Si el prospecto ya mencionó una categoría (ej: licenciaturas), lista TODOS los de esa categoría con nombres reales.
+Si no mencionó nada, lista toda la oferta educativa con nombres reales.
+Primero da la lista completa, luego pregunta cuál le interesa.`,
+
+    correo: `El prospecto eligió un programa. ANTES de dar información del programa, pide su correo electrónico brevemente para dar seguimiento personalizado.
+Si no lo quiere dar, da una respuesta evasiva, o dice que no tiene, avanza de todas formas a info_enviada.
+No menciones el programa todavía — solo pide el correo.`,
+
+    info_enviada: `Da TODA la información del programa usando la BASE DE CONOCIMIENTO:
+duración, costos (inscripción y mensualidad), horarios, modalidad, certificaciones, campo laboral.
+Al terminar, presenta estas dos opciones:
+A) Tengo dudas sobre el programa
+B) Quiero inscribirme [si es programa de inglés, usa "B) Quiero agendar mi clase de prueba gratuita"]`,
+
+    dudas: `Responde la duda con datos concretos de la BASE (costos, horarios, requisitos, etc.).
+Al terminar, vuelve a presentar:
+A) Tengo más dudas
+B) Quiero inscribirme [o "B) Quiero mi clase de prueba" si es inglés]
+Si elige A → siguienteFase: dudas. Si elige B → siguienteFase: inscripcion (o clase_prueba si es inglés).`,
+
+    accion: `Presenta las opciones para el siguiente paso:
+Si el programa es inglés (niños o adultos): A) Tengo dudas  B) Quiero agendar mi clase de prueba gratuita → siguienteFase: clase_prueba
+Para todos los demás programas: A) Tengo dudas  B) Quiero inscribirme → siguienteFase: inscripcion
+Si elige A → siguienteFase: dudas.`,
+
+    asesor: `INFORMACIÓN DE CONTACTO DE LOS PLANTELES:
+🏢 CHILPANCINGO: Sofía Tena #1, Col. Viguri | Tel: 747 472 8775 / 747 472 2466 / 747 491 4498
+🏢 IGUALA: Ignacio Zaragoza 99, Col. Centro | Tel: 733 334 0498
+Horarios: Lun–Vie 8:00–14:00 y 17:00–20:00 | Sáb 8:00–14:00
+
+Flujo:
+1. Si aún no mostraste los horarios: muéstralos y pregunta qué día y hora le viene mejor.
+2. Si ya diste los horarios: pide su número de teléfono.
+3. Si ya tienes el teléfono: confirma que un asesor lo llamará en ~1 hora desde uno de los números de los planteles.
+Captura el teléfono en el campo "telefono" del JSON.`,
+
     seguimiento: 'Retoma la conversación y recuérdale el siguiente paso.',
     cerrado: 'La conversación está cerrada. Si escribe, pregunta si puedes ayudarle en algo más.',
     perdido: 'El prospecto no estaba interesado. Si vuelve a escribir, responde con amabilidad.',
@@ -309,10 +381,11 @@ REGLAS:
 - Mensajes cortos en fases de captura (saludo, correo). Más detallado en info_enviada y dudas.
 - No vuelvas a pedir datos que ya tienes.
 - Si da nombre + programa + correo juntos, captúralos todos.
-- Si pide hablar con una persona, pon requestedHuman: true.
+- Si pide hablar con una persona, pon requestedHuman: true y siguienteFase: asesor.
 - Si claramente no le interesa, pon noInterest: true.
 - "programa": nombre que usó el prospecto, o null.
-- "siguienteFase": saludo, programa, info_enviada, dudas, correo, accion, cerrado, perdido, seguimiento.
+- "telefono": teléfono dado en este mensaje (en fase asesor), o null.
+- "siguienteFase": saludo, programa, correo, info_enviada, dudas, accion, asesor, inscripcion, clase_prueba, cerrado, perdido, seguimiento.
 
 Responde ÚNICAMENTE con JSON válido:
 {
@@ -321,6 +394,7 @@ Responde ÚNICAMENTE con JSON válido:
   "nombre": null,
   "email": null,
   "programa": null,
+  "telefono": null,
   "requestedHuman": false,
   "noInterest": false
 }`
@@ -338,7 +412,7 @@ Responde ÚNICAMENTE con JSON válido:
         { role: 'user', content: params.userMessage },
       ],
       temperature: 0.6,
-      max_tokens: 350,
+      max_tokens: 800,
       response_format: { type: 'json_object' },
     }),
     signal: AbortSignal.timeout(13000),
@@ -356,6 +430,7 @@ Responde ÚNICAMENTE con JSON válido:
     nombre: typeof parsed.nombre === 'string' ? parsed.nombre : null,
     email: typeof parsed.email === 'string' && parsed.email.includes('@') ? parsed.email : null,
     programa: typeof parsed.programa === 'string' ? parsed.programa : null,
+    telefono: typeof parsed.telefono === 'string' ? parsed.telefono : null,
     requestedHuman: Boolean(parsed.requestedHuman),
     noInterest: Boolean(parsed.noInterest),
   }
@@ -623,14 +698,17 @@ export async function POST(request: Request) {
       let ragContext = ''
       try {
         const ragUrl = new URL('/api/rag/query', new URL(request.url).origin)
+        const isInfoPhase = ['programa', 'info_enviada', 'dudas', 'correo'].includes(phase)
+        const matchCount = isInfoPhase ? 15 : 5
+        const ragQuestion = isInfoPhase && leadSnapshot?.curso
+          ? `${leadSnapshot.curso} en Instituto Windsor: costos, horarios, duración, modalidad, certificaciones, campo laboral`
+          : isInfoPhase
+            ? 'Lista completa de toda la oferta educativa del Instituto Windsor con nombres reales, costos y duración'
+            : (leadSummary ? `${leadSummary}\n\n${originalText}` : originalText)
         const ragRes = await fetch(ragUrl.toString(), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            question: leadSummary
-              ? `${leadSummary}\n\n${originalText}`
-              : originalText,
-          }),
+          body: JSON.stringify({ question: ragQuestion, match_count: matchCount }),
           signal: AbortSignal.timeout(8000),
         })
         if (ragRes.ok) {
@@ -668,8 +746,24 @@ export async function POST(request: Request) {
         await supabase.from('leads').update({ stage: newStage }).eq('id', leadId)
       }
 
-      await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, gpt.respuesta, gpt.siguienteFase)
-      return buildProviderResponse(provider, gpt.respuesta, waNumber)
+      // Mensajes hardcoded para fases específicas
+      let botMessage = gpt.respuesta
+      let nextFase = gpt.siguienteFase
+      if (nextFase === 'inscripcion') {
+        botMessage = INSCRIPCION_LICS_MSG
+        nextFase = 'cerrado'
+      } else if (nextFase === 'clase_prueba') {
+        botMessage = CLASE_PRUEBA_MSG
+        nextFase = 'cerrado'
+      }
+
+      // Persistir teléfono si fue capturado en fase asesor
+      if (gpt.telefono && leadId) {
+        await supabase.from('leads').update({ whatsapp: gpt.telefono }).eq('id', leadId)
+      }
+
+      await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, botMessage, nextFase)
+      return buildProviderResponse(provider, botMessage, waNumber)
     }
 
     // Sin conversación aún: saludo inicial
