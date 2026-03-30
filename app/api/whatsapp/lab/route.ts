@@ -32,6 +32,72 @@ https://drive.google.com/file/d/1Hj9rRk1zHMWGnG_CjF287W-hxY2AoTe9/view?usp=drive
 ¡Listo, ya eres parte de la familia Windsor! 🎉🎉🎉
 ¡¡BIENVENID@!!`
 
+const CATALOGO_OFERTA = `¿Cuál de nuestras ofertas educativas te interesa?
+
+🔴PRESENCIALES
+
+🔵BACHILLERATO
+
+🔵LICENCIATURAS
+
+•Licenciatura en Inglés
+•Relaciones públicas y mercadotecnia
+•Administracion turística
+•Psicologia
+
+🔵MAESTRIAS
+
+•Innovación empresarial
+•Multiculturalidad y plurilingüismo
+
+🔵CURSOS DE IDIOMAS
+
+•Inglés
+•Francés
+•Italiano
+•Inglés para niños
+
+🔴EN LINEA
+
+•Cursos de Inglés
+•Licenciatura en inglés
+•Relaciones públicas y mercadotecnia
+•Administracion turística
+
+🔵DIPLOMADOS
+
+•Administración de Instituciones de la Salud
+•Administración de recursos humanos
+•Administración de restaurantes
+•Análisis y Evaluación de Políticas Públicas
+•Comunicación y Liderazgo en el Sector Público
+•Comunicación y Liderazgo empresarial
+•Competencias educativas
+•Comunicación y Gobierno Digital
+•Contabilidad
+•Creación y dirección de franquicias
+•Ciencias del deporte
+•Enfermería
+•Epidemiología
+•Equidad de genero y diversidad sexual
+•Farmacología
+•Gamificación educativa
+•Gerontología
+•Innovación y Gobierno Digital
+•Mindfulness
+•Nutrición deportiva
+•Nutrición y Dietética
+•Políticas y Procesos de Participación Ciudadana
+•Piscología criminológica
+•Psicología educativa
+•Realidad Virtual
+•Salud pública
+•Tecnología educativa
+•Terapia ocupacional
+•Tanatología
+•Enseñanza del idioma inglés
+•Enseñanza del idioma español`
+
 const CLASE_PRUEBA_MSG = `¡Me gustaría invitarte a una clase de prueba! 🎉
 
 Tendrás la oportunidad de conocer a tu profesor(a) y socializar con tus compañeros. La idea es que experimentes nuestro servicio antes de tomar una decisión.
@@ -226,17 +292,11 @@ export async function POST(request: Request) {
       })
     }
 
-    // Fase programa: retornar catálogo directo de la BASE sin pasar por GPT
-    // Usamos solo el primer chunk (más relevante) para evitar mezclar info de todos los programas
+    // Fase programa: catálogo hardcodeado, sin RAG
     if (fase === 'programa') {
-      const catalogoChunk = await queryRAG(
-        'oferta educativa Instituto Windsor lista de programas',
-        1,
-        'first_chunk'
-      )
-      const respuesta = catalogoChunk
-        ? `${nombre ? `${nombre}, ` : ''}aquí está nuestra oferta educativa:\n\n${catalogoChunk}\n\n¿Cuál te interesa?`
-        : 'Contamos con licenciaturas, maestrías, diplomados y cursos de idiomas. ¿Cuál te interesa?'
+      const respuesta = nombre
+        ? `${nombre}, aquí está nuestra oferta educativa:\n\n${CATALOGO_OFERTA}`
+        : CATALOGO_OFERTA
       return NextResponse.json({
         respuesta,
         siguienteFase: 'correo',

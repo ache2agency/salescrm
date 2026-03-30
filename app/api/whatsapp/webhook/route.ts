@@ -235,6 +235,72 @@ async function buildProviderResponse(
 
 // ─── GPT-4o como cerebro del bot ─────────────────────────────────────────────
 
+const CATALOGO_OFERTA = `¿Cuál de nuestras ofertas educativas te interesa?
+
+🔴PRESENCIALES
+
+🔵BACHILLERATO
+
+🔵LICENCIATURAS
+
+•Licenciatura en Inglés
+•Relaciones públicas y mercadotecnia
+•Administracion turística
+•Psicologia
+
+🔵MAESTRIAS
+
+•Innovación empresarial
+•Multiculturalidad y plurilingüismo
+
+🔵CURSOS DE IDIOMAS
+
+•Inglés
+•Francés
+•Italiano
+•Inglés para niños
+
+🔴EN LINEA
+
+•Cursos de Inglés
+•Licenciatura en inglés
+•Relaciones públicas y mercadotecnia
+•Administracion turística
+
+🔵DIPLOMADOS
+
+•Administración de Instituciones de la Salud
+•Administración de recursos humanos
+•Administración de restaurantes
+•Análisis y Evaluación de Políticas Públicas
+•Comunicación y Liderazgo en el Sector Público
+•Comunicación y Liderazgo empresarial
+•Competencias educativas
+•Comunicación y Gobierno Digital
+•Contabilidad
+•Creación y dirección de franquicias
+•Ciencias del deporte
+•Enfermería
+•Epidemiología
+•Equidad de genero y diversidad sexual
+•Farmacología
+•Gamificación educativa
+•Gerontología
+•Innovación y Gobierno Digital
+•Mindfulness
+•Nutrición deportiva
+•Nutrición y Dietética
+•Políticas y Procesos de Participación Ciudadana
+•Piscología criminológica
+•Psicología educativa
+•Realidad Virtual
+•Salud pública
+•Tecnología educativa
+•Terapia ocupacional
+•Tanatología
+•Enseñanza del idioma inglés
+•Enseñanza del idioma español`
+
 const INSCRIPCION_LICS_MSG = `🔴PROCESO DE INSCRIPCIÓN LICENCIATURAS🔴
 
 Antes que nada, ¡felicidades por tomar acción en tu crecimiento profesional y personal! Estamos seguros que tomaste la decisión correcta. 🎉
@@ -695,34 +761,14 @@ export async function POST(request: Request) {
     if (conversacionIdOuter && waNumber) {
       const supabase = createServiceRoleClient()
 
-      // Fase programa: retornar catálogo directo de la BASE sin pasar por GPT
-      // Solo el primer chunk (más relevante = catálogo) para no mezclar info de todos los programas
+      // Fase programa: catálogo hardcodeado, sin RAG
       if (phase === 'programa') {
-        try {
-          const ragUrl = new URL('/api/rag/query', new URL(request.url).origin)
-          const ragRes = await fetch(ragUrl.toString(), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              question: 'oferta educativa Instituto Windsor lista de programas',
-              match_count: 1,
-            }),
-            signal: AbortSignal.timeout(8000),
-          })
-          if (ragRes.ok) {
-            const ragData = await ragRes.json()
-            const matches = ragData?.matches
-            const catalogo = Array.isArray(matches) && matches.length > 0
-              ? (matches[0] as { contenido?: string }).contenido || ''
-              : ragData?.answer || ''
-            const nombre = leadSnapshot?.nombre
-            const botMessage = catalogo
-              ? `${nombre ? `${nombre}, ` : ''}aquí está nuestra oferta educativa:\n\n${catalogo}\n\n¿Cuál te interesa?`
-              : '¿Qué tipo de programa te interesa? Tenemos licenciaturas, maestrías, diplomados y cursos de idiomas.'
-            await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, botMessage, 'correo')
-            return buildProviderResponse(provider, botMessage, waNumber)
-          }
-        } catch { /* continuar con GPT si falla RAG */ }
+        const nombre = leadSnapshot?.nombre
+        const botMessage = nombre
+          ? `${nombre}, aquí está nuestra oferta educativa:\n\n${CATALOGO_OFERTA}`
+          : CATALOGO_OFERTA
+        await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, botMessage, 'correo')
+        return buildProviderResponse(provider, botMessage, waNumber)
       }
 
       // Contexto RAG para otras fases
