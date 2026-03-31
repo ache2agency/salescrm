@@ -1423,6 +1423,11 @@ export default function CRM() {
           .stat-card-grid { grid-template-columns: repeat(2, 1fr) !important; }
           .modal { max-width: 100% !important; margin: 0 !important; border-radius: 12px 12px 0 0 !important; position: fixed !important; bottom: 0 !important; left: 0 !important; right: 0 !important; max-height: 92vh !important; }
           .modal-overlay { align-items: flex-end !important; padding: 0 !important; }
+          .lab-grid { grid-template-columns: 1fr !important; }
+          .lab-state-panel { order: 2; }
+          .lab-chat-panel { order: 1; min-height: 420px !important; }
+          .lab-state-compact { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+          .lab-state-compact div { font-size: 11px; }
         }
       `}</style>
 
@@ -1710,8 +1715,8 @@ export default function CRM() {
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1.8fr", gap: 16 }}>
-              <div style={{ background: "#111", border: "1px solid #2a2a2a", borderRadius: 10, padding: 16 }}>
+            <div className="lab-grid" style={{ display: "grid", gridTemplateColumns: "1.2fr 1.8fr", gap: 16 }}>
+              <div className="lab-state-panel" style={{ background: "#111", border: "1px solid #2a2a2a", borderRadius: 10, padding: 16 }}>
                 <div style={{ fontSize: 11, color: "#999", marginBottom: 8 }}>ESCENARIO</div>
                 <select
                   className="select"
@@ -1771,7 +1776,7 @@ export default function CRM() {
 
                 <div style={{ background: "#0f0f0f", border: "1px solid #222", borderRadius: 8, padding: 12 }}>
                   <div style={{ fontSize: 11, color: "#999", marginBottom: 8 }}>ESTADO DEL LEAD</div>
-                  <div style={{ fontSize: 12, color: "#ddd", lineHeight: 1.8 }}>
+                  <div className="lab-state-compact" style={{ fontSize: 12, color: "#ddd", lineHeight: 1.8 }}>
                     <div><strong>Origen:</strong> {labState.origen || labScenario}</div>
                     <div><strong>Nombre:</strong> {labState.nombre || "—"}</div>
                     <div><strong>Correo:</strong> {labState.email || "—"}</div>
@@ -1782,7 +1787,7 @@ export default function CRM() {
                 </div>
               </div>
 
-              <div style={{ background: "#111", border: "1px solid #2a2a2a", borderRadius: 10, padding: 16, display: "flex", flexDirection: "column", minHeight: 480 }}>
+              <div className="lab-chat-panel" style={{ background: "#111", border: "1px solid #2a2a2a", borderRadius: 10, padding: 16, display: "flex", flexDirection: "column", minHeight: 480 }}>
                 <div style={{ fontSize: 11, color: "#999", marginBottom: 12 }}>CHAT DE PRUEBA</div>
                 <div style={{ flex: 1, background: "#0c0c0c", border: "1px solid #1f1f1f", borderRadius: 8, padding: 12, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
                   {!labStarted && (
