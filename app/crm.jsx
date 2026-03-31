@@ -1413,10 +1413,14 @@ export default function CRM() {
         .admin-badge { background: #E8A83822; color: #E8A838; border: 1px solid #E8A83844; border-radius: 4px; font-size: 10px; padding: 2px 8px; letter-spacing: 1px; }
         .hamburger-btn { background: transparent; border: none; cursor: pointer; padding: 8px; color: #E8A838; }
         .mobile-only { display: none; }
+        .crm-tagline { display: inline; }
         @media (max-width: 768px) {
           .desktop-nav { display: none !important; }
           .desktop-user { display: none !important; }
           .mobile-only { display: flex !important; align-items: center; gap: 8px; }
+          .crm-tagline { display: none !important; }
+          .crm-admin-badge { display: none !important; }
+          .crm-title { font-size: 22px !important; }
           .mobile-menu { display: flex; flex-direction: column; position: absolute; top: 100%; left: 0; right: 0; background: #161616; border-bottom: 2px solid #E8A83844; box-shadow: 0 8px 24px rgba(0,0,0,0.6); z-index: 400; padding: 8px 0; }
           .mobile-menu .nav-btn { text-align: left; padding: 12px 20px; border-radius: 0; font-size: 13px; border-bottom: 1px solid #1a1a1a; }
           .mobile-menu .nav-btn:last-child { border-bottom: none; }
@@ -1432,12 +1436,12 @@ export default function CRM() {
       `}</style>
 
       {/* HEADER */}
-      <div style={{ borderBottom: "1px solid #1e1e1e", padding: "0 24px", position: "sticky", top: 0, zIndex: 300, background: "#0e0e0e" }}>
+      <div style={{ borderBottom: "1px solid #1e1e1e", padding: "0 24px", position: "sticky", top: 0, zIndex: 300, background: "#0e0e0e", overflow: "visible" }}>
         <div style={{ maxWidth: 1400, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 60 }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
-            <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, letterSpacing: 3, color: "#E8A838" }}>WINDSOR CRM</span>
-            <span style={{ fontSize: 11, color: "#555", letterSpacing: 2 }}>CRM v1.0</span>
-            {isAdmin && <span className="admin-badge">ADMIN</span>}
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span className="crm-title" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, letterSpacing: 3, color: "#E8A838" }}>WINDSOR CRM</span>
+            <span className="crm-tagline" style={{ fontSize: 11, color: "#555", letterSpacing: 2 }}>CRM v1.0</span>
+            {isAdmin && <span className="admin-badge crm-admin-badge">ADMIN</span>}
           </div>
 
           {/* Desktop nav */}
