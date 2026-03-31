@@ -1417,7 +1417,7 @@ export default function CRM() {
           .desktop-nav { display: none !important; }
           .desktop-user { display: none !important; }
           .mobile-only { display: flex !important; align-items: center; gap: 8px; }
-          .mobile-menu { display: flex; flex-direction: column; position: absolute; top: 100%; left: -24px; right: -24px; background: #161616; border-bottom: 2px solid #E8A83844; box-shadow: 0 8px 24px rgba(0,0,0,0.6); z-index: 400; padding: 8px 0; }
+          .mobile-menu { display: flex; flex-direction: column; position: absolute; top: 100%; left: 0; right: 0; background: #161616; border-bottom: 2px solid #E8A83844; box-shadow: 0 8px 24px rgba(0,0,0,0.6); z-index: 400; padding: 8px 0; }
           .mobile-menu .nav-btn { text-align: left; padding: 12px 20px; border-radius: 0; font-size: 13px; border-bottom: 1px solid #1a1a1a; }
           .mobile-menu .nav-btn:last-child { border-bottom: none; }
           .stat-card-grid { grid-template-columns: repeat(2, 1fr) !important; }
