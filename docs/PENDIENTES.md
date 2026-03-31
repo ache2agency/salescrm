@@ -6,19 +6,28 @@ Documento para anotar lo que queda por hacer y los errores a resolver. Actualiza
 
 ## Pendiente (próxima sesión)
 
+### **Bot WhatsApp — Siguiente paso inmediato**
+- [ ] Probar flujo completo en LAB: saludo → catálogo → correo → info → CTA A/B → inscripción/clase prueba
+- [ ] Probar fase `asesor`: pedir día/hora → capturar teléfono → confirmar llamada
+- [ ] Verificar que `info_enviada` da información correcta del programa elegido desde la BASE
+- [ ] Agregar **fechas de inicio** de cada programa a la BASE (RAG)
+- [ ] Definir y cargar el prompt maestro del bot desde la pestaña `BOT` en el CRM
+- [ ] Probar bot en producción (WhatsApp real) con el flujo completo
+
 ### **Técnico / Producto**
 - [ ] Ejecutar Fase 1 y Fase 2 de `docs/IMPLEMENTACION_ESCUELA.md`
 - [ ] Revisar manualmente el CRM con `docs/CRM_QA_CHECKLIST.md`
-- [ ] Probar bot GPT-4o en producción con conversaciones reales y ajustar system prompt en `askGPT()` si es necesario
-- [ ] Cargar contenido real de programas en la `BASE` (RAG): costos, horarios, niveles, proceso de inscripción
-- [ ] Terminar de definir y cargar el prompt maestro del bot desde la pestaña `BOT` en el CRM
 - [ ] Diseñar la evolución de `FLOWS` a un constructor visual tipo canvas
 - [ ] Validar en uso real la sincronía completa `lead.stage` ↔ `whatsapp_conversaciones.fase`
-- [ ] Integrar al CRM el envío de template inicial para leads `walkin` cuando la template de Twilio ya esté aprobada
+- [ ] Integrar al CRM el envío de template inicial para leads `walkin`
 - [ ] Terminar activación de Meta Cloud API en producción
 - [ ] Correr migración de `lead_activities` en Supabase y validar que el historial persista entre sesiones
 - [ ] Afinar el guardado de notas del lead para registrar un solo evento al guardar/blurear, no por cada tecla
-- [ ] Seguir limpiando `app/crm.jsx` moviendo helpers/lógica compartida a `lib/` o hooks
+
+### **Mobile / UX — Revisión pendiente**
+- [ ] Probar el CRM completo en iPhone/Android después de los cambios responsive de hoy
+- [ ] Verificar que el menú hamburguesa se cierra al hacer scroll o al tocar fuera
+- [ ] Revisar que las demás vistas (KANBAN, LISTA, AGENDA, BASE, FLOWS, BOT) se ven bien en móvil — sólo se ajustaron STATS, LAB BOT, modales y CONVERSACIONES por ahora
 
 ---
 
@@ -59,6 +68,7 @@ Documento para anotar lo que queda por hacer y los errores a resolver. Actualiza
 
 ## Hecho (referencia rápida)
 
+- **Flujo bot simulado y definido (2026-03-30):** saludo → programa (catálogo hardcodeado) → correo → info_enviada (RAG) → accion (CTA A/B) → dudas/inscripcion/clase_prueba. Mensajes hardcodeados: catálogo, inscripción lics, clase de prueba. Fase asesor con planteles, horarios y captura de teléfono. Interceptor para bloquear que GPT genere el catálogo por su cuenta.
 - **Flujo del bot WhatsApp por fases:** saludo → programa → correo → info_enviada → dudas → accion → cerrado/perdido. Se actualiza `fase` y lead (stage, nombre, email, curso).
 - **Twilio productivo activo:** sender oficial `Instituto Windsor` en línea con webhook apuntando a `https://crm.windsor.edu.mx/api/whatsapp/webhook`.
 - **Separar oferta educativa:** Solo programas de *idiomas* (niños/adultos) ofrecen clase de prueba; el resto ofrece llamada o inscripción. Config en webhook (`tieneClasePrueba`) y CTA distinto según programa (link agendar vs contacto).
@@ -83,4 +93,6 @@ Documento para anotar lo que queda por hacer y los errores a resolver. Actualiza
 
 ---
 
-*Última actualización (2026-03-27): Bot reescrito con GPT-4o (lenguaje natural), agenda pública con horarios reales y bloques fijos, AgendaPanel con vista calendario, stages alineados al tipo de cita. Foco siguiente: cargar contenido real en BASE y validar bot en producción.*
+- **CRM mobile-ready (2026-03-30):** viewport meta + PWA (manifest.json, iconos). Hamburger menu con dropdown `position:absolute top:100%` anclado al header. Stats 2col, LAB BOT stack vertical, modales bottom-sheet en mobile. ConversationsPanel con toggle list/chat y botón "← Conversaciones". Header limpio en mobile: oculta "CRM v1.0", badge ADMIN, reduce título a 22px.
+
+*Última actualización (2026-03-30): Flujo bot definido y hardcodeado. CRM completamente adaptado a móvil: PWA, hamburger menu, responsive en todas las secciones clave.*

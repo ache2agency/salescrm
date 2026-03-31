@@ -210,39 +210,59 @@ La lógica de roles se basa en el campo `rol` en `profiles` y/o metadatos de usu
 - Webhook estable de WhatsApp en Vercel:
   - `https://crm.windsor.edu.mx/api/whatsapp/webhook`
 
-### 7.1 Estado operativo del bot
+### 7.1 Estado operativo del bot (actualizado 2026-03-30)
 
-- **Canal productivo activo**:
-  - Twilio en producción con número oficial.
-  - El bot ya responde en producción desde `crm.windsor.edu.mx`.
-- **BASE**:
-  - Se sigue usando como base documental libre (`titulo` + `contenido`) para RAG.
-  - No se rediseñó la UX de captura; el ajuste actual consiste en que el bot y el `LAB BOT` consulten mejor esa base.
-- **BOT**:
-  - Ya existe como configuración editable desde el CRM para identidad y comportamiento general.
-- **FLOWS**:
-  - Sigue en su versión actual por palabra clave.
-  - Todavía no se reemplaza por el canvas visual tipo `n8n`.
-- **Lógica comercial en ajuste**:
-  - El bot debe decidir por:
-    - origen del lead (`ads` o `walkin`)
-    - programa / oferta educativa
-    - etapa del pipeline
-  - Los leads de `ads` deben capturar nombre, correo y programa en conversación.
-  - Los leads `walkin` ya pueden venir precargados por un humano y el bot no debe volver a pedir esos datos.
-  - Si el prospecto cambia de tema dentro del chat, el bot debe poder cambiar el foco a otra oferta educativa sin romper la conversación.
-  - Si la pregunta es parcial (“qué licenciaturas hay”, “costos”, “horarios”), el bot debe responder solo esa intención y luego avanzar al siguiente paso.
-  - Avance reciente en `LAB BOT`:
-    - ya renderiza respuestas de RAG con mejor estructura visual;
-    - ya consulta la `BASE` real para `información`, `costos` y `horarios`;
-    - ya valida correos mal capturados en el paso de programa;
-    - ya detecta varias ofertas específicas como `Psicología`, `Administración Turística` y `Relaciones Públicas y Mercadotecnia`.
-  - Bloqueo actual en `LAB BOT`:
-    - todavía no cambia de forma confiable entre ofertas educativas dentro de la misma conversación;
-    - si el lead venía hablando de una oferta y luego pide otra, a veces sigue respondiendo sobre la anterior o cae en una respuesta genérica;
-    - `Cursos de inglés` como familia general todavía no termina de comportarse bien cuando el prospecto cambia desde una licenciatura/maestría/diplomado o viceversa.
+- **Flujo conversacional definido y simulado**:
+  - `saludo → programa (catálogo) → correo → info_enviada → accion (CTA A/B) → dudas / inscripcion / clase_prueba`
+  - El correo se pide **antes** de dar información del programa; si no lo da, avanza igual.
+  - La fase `programa` ahora retorna el catálogo **hardcodeado** directamente (sin RAG), interceptando cualquier transición a esa fase desde GPT.
+  - Catálogo hardcodeado en `CATALOGO_OFERTA` (constante en `lab/route.ts` y `webhook/route.ts`).
 
-### 8. Marketing y Ventas (Ecosistema Externo)
+- **Mensajes hardcodeados implementados**:
+  - `INSCRIPCION_LICS_MSG`: proceso de inscripción completo (documentos, banco, link de forma).
+  - `CLASE_PRUEBA_MSG`: invitación a clase de prueba gratuita con link CRM.
+  - `CATALOGO_OFERTA`: lista completa de programas organizada por categoría.
+  - Contacto de planteles (Chilpancingo e Iguala) embebido en instrucción de fase `asesor`.
+
+- **CTA A/B por tipo de programa**:
+  - Licenciaturas/otros: A) Dudas / B) Quiero inscribirme → fase `inscripcion`.
+  - Inglés (niños/adultos): A) Dudas / B) Clase de prueba gratuita → fase `clase_prueba`.
+
+- **Fase `asesor`** (cuando pide hablar con humano):
+  - Muestra horarios de ambos planteles.
+  - Pregunta día y hora disponible.
+  - Captura teléfono y confirma que llamarán en ~1hr con los números del plantel.
+  - Captura `telefono` en JSON de GPT.
+
+- **RAG**: sigue activo para fases `info_enviada`, `dudas`, `correo` (info específica de programa).
+- **max_tokens webhook**: aumentado a 800 para respuestas completas.
+- **Pendiente**: agregar fechas de inicio de cada programa a la BASE.
+
+### 8. Diseño responsive y PWA (actualizado 2026-03-30)
+
+- **PWA instalable en móvil**:
+  - `public/manifest.json`: nombre, theme_color `#E8A838`, background `#0e0e0e`, iconos `icon-192.png` / `icon-512.png`.
+  - `app/layout.tsx`: viewport meta, `apple-mobile-web-app-capable`, `theme-color`, `link rel="manifest"`, `link rel="apple-touch-icon"`.
+
+- **Header sticky con menú hamburguesa**:
+  - En desktop: nav horizontal completo + email de usuario + botón "+ NUEVO LEAD".
+  - En mobile (`≤768px`): solo "WINDSOR CRM" (22px) + botón "+" + ícono hamburguesa.
+  - "CRM v1.0" y badge ADMIN se ocultan en mobile (`.crm-tagline`, `.crm-admin-badge { display: none !important }`).
+  - Dropdown del menú hamburguesa renderizado **dentro** del header con `position: absolute; top: 100%; left: 0; right: 0; z-index: 400` — se ancla al borde inferior del header sin necesidad de valores `top` hardcodeados.
+
+- **Stats grid**: 4 columnas desktop → 2 columnas mobile (`stat-card-grid`).
+
+- **LAB BOT**: 2 columnas desktop → 1 columna mobile (`lab-grid`). Chat arriba, estado del bot abajo.
+
+- **Modales**: en mobile se abren como sheet desde la parte inferior (`position: fixed; bottom: 0; border-radius: 12px 12px 0 0`).
+
+- **ConversationsPanel** (`components/crm/ConversationsPanel.jsx`):
+  - Estado `mobileView: 'list' | 'chat'` controla qué panel se muestra en mobile.
+  - Tap en conversación → vista de chat; botón "← Conversaciones" → regresa a la lista.
+  - Filtros apilados verticalmente en mobile.
+  - CSS en `<style>` interno con clases `.convs-list-panel` / `.convs-chat-panel` toggled por `mobileView`.
+
+### 9. Marketing y Ventas (Ecosistema Externo)
 
 - **Documentación completa**: Ver `docs/marketing/` para toda la estrategia
 - **Landing Page**: `landing.html` con SEO optimizado y analytics tracking
@@ -254,7 +274,7 @@ La lógica de roles se basa en el campo `rol` en `profiles` y/o metadatos de usu
 - **Landing Details**: Detalles técnicos en `docs/marketing/LANDING_PAGE.md`
 - **Marketing Overview**: Estrategia general en `docs/marketing/OVERVIEW.md`
 
-### 9. Cómo seguir usando este archivo
+### 10. Cómo seguir usando este archivo
 
 - **Cada nueva funcionalidad grande**: agregar un bloque corto aquí (qué hace, en qué archivos vive).
 - **Cambios en tablas de Supabase**: anotar nuevas tablas, columnas o funciones SQL.
@@ -262,4 +282,4 @@ La lógica de roles se basa en el campo `rol` en `profiles` y/o metadatos de usu
 
 Con esto, cualquier persona (incluyéndote tú en unas semanas) puede entender rápido qué hace el proyecto y por dónde empezar.
 
-*Última actualización (2026-03-27): Bot reescrito con GPT-4o como cerebro principal (lenguaje natural, sin regex), agenda pública con horarios reales por tipo de alumno y bloques fijos, AgendaPanel con vista calendario mensual y modal de detalle, stages del CRM alineados al tipo de cita.*
+*Última actualización (2026-03-30): Flujo bot completamente simulado y definido. Catálogo hardcodeado, mensajes de inscripción y clase de prueba hardcodeados, CTA A/B por tipo de programa, fase asesor con info de planteles y captura de teléfono. CRM adaptado a móvil: viewport, PWA, hamburger menu, stats 2 col, LAB BOT stack, modales bottom-sheet, ConversationsPanel con navegación list/chat.*
