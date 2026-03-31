@@ -1411,13 +1411,14 @@ export default function CRM() {
         textarea { resize: vertical; min-height: 60px; }
         .loading { display: flex; align-items: center; justify-content: center; height: 200px; font-size: 14px; color: #555; }
         .admin-badge { background: #E8A83822; color: #E8A838; border: 1px solid #E8A83844; border-radius: 4px; font-size: 10px; padding: 2px 8px; letter-spacing: 1px; }
-        .hamburger-btn { display: none; background: transparent; border: none; cursor: pointer; padding: 8px; color: #E8A838; }
+        .hamburger-btn { background: transparent; border: none; cursor: pointer; padding: 8px; color: #E8A838; }
+        .mobile-only { display: none; }
         .mobile-menu { display: none; }
         @media (max-width: 768px) {
           .desktop-nav { display: none !important; }
           .desktop-user { display: none !important; }
-          .hamburger-btn { display: flex; align-items: center; justify-content: center; }
-          .mobile-menu { display: flex; flex-direction: column; position: fixed; top: 60px; left: 0; right: 0; background: #111; border-bottom: 1px solid #2a2a2a; z-index: 200; padding: 8px 0; }
+          .mobile-only { display: flex !important; align-items: center; gap: 8px; }
+          .mobile-menu { display: flex; flex-direction: column; position: fixed; top: 60px; left: 0; right: 0; background: #161616; border-bottom: 2px solid #E8A83844; box-shadow: 0 8px 24px rgba(0,0,0,0.6); z-index: 199; padding: 8px 0; }
           .mobile-menu .nav-btn { text-align: left; padding: 12px 20px; border-radius: 0; font-size: 13px; border-bottom: 1px solid #1a1a1a; }
           .mobile-menu .nav-btn:last-child { border-bottom: none; }
           .stat-card-grid { grid-template-columns: repeat(2, 1fr) !important; }
@@ -1466,8 +1467,8 @@ export default function CRM() {
           </div>
 
           {/* Mobile: hamburger + nuevo lead */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <button className="btn btn-primary hamburger-btn" onClick={() => setShowForm(true)} style={{ fontSize: 18, padding: "6px 12px" }}>+</button>
+          <div className="mobile-only">
+            <button className="btn btn-primary" onClick={() => setShowForm(true)} style={{ fontSize: 18, padding: "6px 12px" }}>+</button>
             <button className="hamburger-btn" onClick={() => setMobileMenuOpen(o => !o)} aria-label="Menú">
               {mobileMenuOpen
                 ? <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
