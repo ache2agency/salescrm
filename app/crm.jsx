@@ -1413,12 +1413,11 @@ export default function CRM() {
         .admin-badge { background: #E8A83822; color: #E8A838; border: 1px solid #E8A83844; border-radius: 4px; font-size: 10px; padding: 2px 8px; letter-spacing: 1px; }
         .hamburger-btn { background: transparent; border: none; cursor: pointer; padding: 8px; color: #E8A838; }
         .mobile-only { display: none; }
-        .mobile-menu { display: none; }
         @media (max-width: 768px) {
           .desktop-nav { display: none !important; }
           .desktop-user { display: none !important; }
           .mobile-only { display: flex !important; align-items: center; gap: 8px; }
-          .mobile-menu { display: flex; flex-direction: column; position: fixed; top: 60px; left: 0; right: 0; background: #161616; border-bottom: 2px solid #E8A83844; box-shadow: 0 8px 24px rgba(0,0,0,0.6); z-index: 250; padding: 8px 0; }
+          .mobile-menu { display: flex; flex-direction: column; position: absolute; top: 100%; left: -24px; right: -24px; background: #161616; border-bottom: 2px solid #E8A83844; box-shadow: 0 8px 24px rgba(0,0,0,0.6); z-index: 400; padding: 8px 0; }
           .mobile-menu .nav-btn { text-align: left; padding: 12px 20px; border-radius: 0; font-size: 13px; border-bottom: 1px solid #1a1a1a; }
           .mobile-menu .nav-btn:last-child { border-bottom: none; }
           .stat-card-grid { grid-template-columns: repeat(2, 1fr) !important; }
@@ -1477,33 +1476,33 @@ export default function CRM() {
             </button>
           </div>
         </div>
-      </div>
 
-      {/* Mobile menu dropdown */}
-      {mobileMenuOpen && (
-        <div className="mobile-menu">
-          {[
-            { label: "KANBAN", v: "kanban", action: () => setView("kanban") },
-            { label: "LISTA", v: "lista", action: () => setView("lista") },
-            { label: "AGENDA", v: "agenda", action: () => setView("agenda") },
-            { label: "CONVERSACIONES", v: "convs", action: () => { setView("convs"); fetchWhatsConvs(); setSelectedConv(null); setConvMessages([]); } },
-            ...(isAdmin ? [
-              { label: "BASE", v: "base", action: () => { setView("base"); loadDocumentos(); } },
-              { label: "BOT", v: "bot", action: () => { setView("bot"); loadBotConfig(); } },
-              { label: "LAB BOT", v: "lab", action: () => { setView("lab"); resetLabSimulation(); } },
-              { label: "FLOWS", v: "flows", action: () => { setView("flows"); loadWhatsappFlow(); } },
-            ] : []),
-          ].map(item => (
-            <button
-              key={item.v}
-              className={`nav-btn ${view === item.v ? "active" : ""}`}
-              onClick={() => { confirmReturnToBotIfNeeded(item.action); setMobileMenuOpen(false); }}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      )}
+        {/* Mobile menu dropdown — inside header so position:absolute top:100% anchors to header bottom */}
+        {mobileMenuOpen && (
+          <div className="mobile-menu">
+            {[
+              { label: "KANBAN", v: "kanban", action: () => setView("kanban") },
+              { label: "LISTA", v: "lista", action: () => setView("lista") },
+              { label: "AGENDA", v: "agenda", action: () => setView("agenda") },
+              { label: "CONVERSACIONES", v: "convs", action: () => { setView("convs"); fetchWhatsConvs(); setSelectedConv(null); setConvMessages([]); } },
+              ...(isAdmin ? [
+                { label: "BASE", v: "base", action: () => { setView("base"); loadDocumentos(); } },
+                { label: "BOT", v: "bot", action: () => { setView("bot"); loadBotConfig(); } },
+                { label: "LAB BOT", v: "lab", action: () => { setView("lab"); resetLabSimulation(); } },
+                { label: "FLOWS", v: "flows", action: () => { setView("flows"); loadWhatsappFlow(); } },
+              ] : []),
+            ].map(item => (
+              <button
+                key={item.v}
+                className={`nav-btn ${view === item.v ? "active" : ""}`}
+                onClick={() => { confirmReturnToBotIfNeeded(item.action); setMobileMenuOpen(false); }}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div style={{ maxWidth: 1400, margin: "0 auto", padding: "24px" }}>
         {/* STATS */}
