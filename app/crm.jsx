@@ -156,6 +156,7 @@ export default function CRM() {
     fase: "saludo",
     nextStep: "Pedir nombre",
   });
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
@@ -1410,70 +1411,97 @@ export default function CRM() {
         textarea { resize: vertical; min-height: 60px; }
         .loading { display: flex; align-items: center; justify-content: center; height: 200px; font-size: 14px; color: #555; }
         .admin-badge { background: #E8A83822; color: #E8A838; border: 1px solid #E8A83844; border-radius: 4px; font-size: 10px; padding: 2px 8px; letter-spacing: 1px; }
+        .hamburger-btn { display: none; background: transparent; border: none; cursor: pointer; padding: 8px; color: #E8A838; }
+        .mobile-menu { display: none; }
+        @media (max-width: 768px) {
+          .desktop-nav { display: none !important; }
+          .desktop-user { display: none !important; }
+          .hamburger-btn { display: flex; align-items: center; justify-content: center; }
+          .mobile-menu { display: flex; flex-direction: column; position: fixed; top: 60px; left: 0; right: 0; background: #111; border-bottom: 1px solid #2a2a2a; z-index: 200; padding: 8px 0; }
+          .mobile-menu .nav-btn { text-align: left; padding: 12px 20px; border-radius: 0; font-size: 13px; border-bottom: 1px solid #1a1a1a; }
+          .mobile-menu .nav-btn:last-child { border-bottom: none; }
+          .stat-card-grid { grid-template-columns: repeat(2, 1fr) !important; }
+          .modal { max-width: 100% !important; margin: 0 !important; border-radius: 12px 12px 0 0 !important; position: fixed !important; bottom: 0 !important; left: 0 !important; right: 0 !important; max-height: 92vh !important; }
+          .modal-overlay { align-items: flex-end !important; padding: 0 !important; }
+        }
       `}</style>
 
       {/* HEADER */}
-      <div style={{ borderBottom: "1px solid #1e1e1e", padding: "0 24px" }}>
+      <div style={{ borderBottom: "1px solid #1e1e1e", padding: "0 24px", position: "relative", zIndex: 201 }}>
         <div style={{ maxWidth: 1400, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 60 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
             <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, letterSpacing: 3, color: "#E8A838" }}>WINDSOR CRM</span>
             <span style={{ fontSize: 11, color: "#555", letterSpacing: 2 }}>CRM v1.0</span>
             {isAdmin && <span className="admin-badge">ADMIN</span>}
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
+
+          {/* Desktop nav */}
+          <div className="desktop-nav" style={{ display: "flex", gap: 8 }}>
             <button className={`nav-btn ${view === "kanban" ? "active" : ""}`} onClick={() => confirmReturnToBotIfNeeded(() => setView("kanban"))}>KANBAN</button>
             <button className={`nav-btn ${view === "lista" ? "active" : ""}`} onClick={() => confirmReturnToBotIfNeeded(() => setView("lista"))}>LISTA</button>
             <button className={`nav-btn ${view === "agenda" ? "active" : ""}`} onClick={() => confirmReturnToBotIfNeeded(() => setView("agenda"))}>AGENDA</button>
             <button
               className={`nav-btn ${view === "convs" ? "active" : ""}`}
-              onClick={() => confirmReturnToBotIfNeeded(() => {
-                setView("convs");
-                fetchWhatsConvs();
-                setSelectedConv(null);
-                setConvMessages([]);
-              })}
-            >
-              CONVERSACIONES
-            </button>
+              onClick={() => confirmReturnToBotIfNeeded(() => { setView("convs"); fetchWhatsConvs(); setSelectedConv(null); setConvMessages([]); })}
+            >CONVERSACIONES</button>
             {isAdmin && (
               <>
-                <button
-                  className={`nav-btn ${view === "base" ? "active" : ""}`}
-                  onClick={() => confirmReturnToBotIfNeeded(() => { setView("base"); loadDocumentos(); })}
-                >
-                  BASE
-                </button>
-                <button
-                  className={`nav-btn ${view === "bot" ? "active" : ""}`}
-                  onClick={() => confirmReturnToBotIfNeeded(() => { setView("bot"); loadBotConfig(); })}
-                >
-                  BOT
-                </button>
-                <button
-                  className={`nav-btn ${view === "lab" ? "active" : ""}`}
-                  onClick={() => confirmReturnToBotIfNeeded(() => { setView("lab"); resetLabSimulation(); })}
-                >
-                  LAB BOT
-                </button>
-                <button
-                  className={`nav-btn ${view === "flows" ? "active" : ""}`}
-                  onClick={() => confirmReturnToBotIfNeeded(() => { setView("flows"); loadWhatsappFlow(); })}
-                >
-                  FLOWS
-                </button>
+                <button className={`nav-btn ${view === "base" ? "active" : ""}`} onClick={() => confirmReturnToBotIfNeeded(() => { setView("base"); loadDocumentos(); })}>BASE</button>
+                <button className={`nav-btn ${view === "bot" ? "active" : ""}`} onClick={() => confirmReturnToBotIfNeeded(() => { setView("bot"); loadBotConfig(); })}>BOT</button>
+                <button className={`nav-btn ${view === "lab" ? "active" : ""}`} onClick={() => confirmReturnToBotIfNeeded(() => { setView("lab"); resetLabSimulation(); })}>LAB BOT</button>
+                <button className={`nav-btn ${view === "flows" ? "active" : ""}`} onClick={() => confirmReturnToBotIfNeeded(() => { setView("flows"); loadWhatsappFlow(); })}>FLOWS</button>
               </>
             )}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+
+          {/* Desktop user */}
+          <div className="desktop-user" style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <span style={{ fontSize: 11, color: "#555" }}>{currentProfile?.email || currentUser?.email}</span>
             <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ NUEVO LEAD</button>
+          </div>
+
+          {/* Mobile: hamburger + nuevo lead */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <button className="btn btn-primary hamburger-btn" onClick={() => setShowForm(true)} style={{ fontSize: 18, padding: "6px 12px" }}>+</button>
+            <button className="hamburger-btn" onClick={() => setMobileMenuOpen(o => !o)} aria-label="Menú">
+              {mobileMenuOpen
+                ? <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                : <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+              }
+            </button>
           </div>
         </div>
       </div>
 
+      {/* Mobile menu dropdown */}
+      {mobileMenuOpen && (
+        <div className="mobile-menu">
+          {[
+            { label: "KANBAN", v: "kanban", action: () => setView("kanban") },
+            { label: "LISTA", v: "lista", action: () => setView("lista") },
+            { label: "AGENDA", v: "agenda", action: () => setView("agenda") },
+            { label: "CONVERSACIONES", v: "convs", action: () => { setView("convs"); fetchWhatsConvs(); setSelectedConv(null); setConvMessages([]); } },
+            ...(isAdmin ? [
+              { label: "BASE", v: "base", action: () => { setView("base"); loadDocumentos(); } },
+              { label: "BOT", v: "bot", action: () => { setView("bot"); loadBotConfig(); } },
+              { label: "LAB BOT", v: "lab", action: () => { setView("lab"); resetLabSimulation(); } },
+              { label: "FLOWS", v: "flows", action: () => { setView("flows"); loadWhatsappFlow(); } },
+            ] : []),
+          ].map(item => (
+            <button
+              key={item.v}
+              className={`nav-btn ${view === item.v ? "active" : ""}`}
+              onClick={() => { confirmReturnToBotIfNeeded(item.action); setMobileMenuOpen(false); }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div style={{ maxWidth: 1400, margin: "0 auto", padding: "24px" }}>
         {/* STATS */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
+        <div className="stat-card-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
           {[
             { label: "PIPELINE TOTAL", value: formatPeso(pipelineValue), sub: `${filteredLeads.filter((l) => !["inscrito","perdido","archivado"].includes(normalizeStage(l.stage))).length} leads activos`, color: "#4A90D9" },
             { label: "INSCRITOS", value: formatPeso(totalRevenue), sub: `${leads.filter((l) => normalizeStage(l.stage) === "inscrito").length} cierres`, color: "#27AE60" },
