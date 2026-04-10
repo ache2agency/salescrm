@@ -548,13 +548,14 @@ Si no lo quiere dar, da una respuesta evasiva, o dice que no tiene, avanza de to
 No menciones el programa todavía — solo pide el correo.`,
 
     info_enviada: `Da la información del programa usando la BASE DE CONOCIMIENTO: duración, costos (inscripción y mensualidad), horarios, modalidad, certificaciones, campo laboral.
+IMPORTANTE: SIEMPRE incluye la promoción vigente indicando el porcentaje de descuento y el precio final a pagar. Formatea así: "Inscripción: ~$PRECIO_ORIGINAL~ → $PRECIO_CON_DESCUENTO (X% de descuento)". Si la BASE no tiene el precio exacto con descuento, calcula el descuento a partir del porcentaje indicado.
 NO incluyas el proceso de inscripción ni links de pago — eso se envía en otro paso.
 SIEMPRE termina el mensaje con exactamente estas dos opciones, sin excepción:
 A) Tengo dudas sobre el programa
 B) Quiero inscribirme
 (Si el programa es inglés adultos, inglés niños o cualquier curso de idiomas, cambia B por: "B) Quiero agendar mi clase de prueba gratuita" y pon siguienteFase: accion)`,
 
-    dudas: `Responde la duda con datos concretos de la BASE (costos, horarios, requisitos, etc.).
+    dudas: `Responde la duda con datos concretos de la BASE (costos, horarios, requisitos, etc.). Si la duda es sobre costos o precio, incluye siempre la promoción vigente con el porcentaje de descuento y el precio final (ej. "Inscripción: ~$2,300~ → $690 (70% de descuento)").
 Al terminar, vuelve a presentar:
 A) Tengo más dudas
 B) Quiero inscribirme [o "B) Quiero mi clase de prueba" si es inglés]
@@ -1030,6 +1031,64 @@ export async function POST(request: Request) {
         }
       }
 
+      // ── Interceptor global: cambio de programa en fases post-captura ─────────
+      // Si el usuario menciona un programa distinto al guardado, forzar info_enviada
+      if (['info_enviada', 'dudas', 'accion', 'seguimiento'].includes(phase)) {
+        const detectProgramaCambio = (msg: string): string | null => {
+          const m = msg.toLowerCase()
+          if (/ingl[eé]s.*ni[ñn]o|ni[ñn]o.*ingl[eé]s/i.test(msg)) return 'Inglés para niños'
+          if (/ingl[eé]s.*adulto|adulto.*ingl[eé]s/i.test(msg)) return 'Inglés para adultos'
+          if (/licenciatura.*ingl[eé]s|ingl[eé]s.*licenciatura|\blic\b.*ingl[eé]s/i.test(msg)) return 'Licenciatura en Inglés'
+          if (/franc[eé]s/i.test(m)) return 'Francés'
+          if (/italian[oa]/i.test(m)) return 'Italiano'
+          if (/psicolog/i.test(m)) return 'Psicología'
+          if (/administraci[oó]n tur[ií]stica|turism/i.test(m)) return 'Administración turística'
+          if (/relaciones p[uú]blicas/i.test(m)) return 'Relaciones públicas y mercadotecnia'
+          if (/innovaci[oó]n empresarial/i.test(m)) return 'Maestría en Innovación empresarial'
+          if (/multiculturalidad|pluriling/i.test(m)) return 'Maestría en Multiculturalidad y plurilingüismo'
+          if (/bachillerato/i.test(m)) return 'Bachillerato'
+          if (/diplomado/i.test(m)) return 'Diplomados'
+          return null
+        }
+        const programaNuevoPC = detectProgramaCambio(originalText)
+        const programaActualPC = (leadSnapshot?.curso || '').toLowerCase().trim()
+        if (
+          programaNuevoPC &&
+          programaNuevoPC.toLowerCase() !== programaActualPC &&
+          programaActualPC !== 'whatsapp - instituto windsor'
+        ) {
+          if (leadId) {
+            await supabase.from('leads').update({ curso: programaNuevoPC }).eq('id', leadId)
+            leadSnapshot = { ...leadSnapshot, curso: programaNuevoPC } as LeadSnapshot
+          }
+          let ragPC = ''
+          try {
+            const ragUrlPC = new URL('/api/rag/query', new URL(request.url).origin)
+            const ragResPC = await fetch(ragUrlPC.toString(), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                question: `${programaNuevoPC} en Instituto Windsor: costos, horarios, duración, modalidad, certificaciones, campo laboral`,
+                match_count: 15,
+              }),
+              signal: AbortSignal.timeout(8000),
+            })
+            if (ragResPC.ok) {
+              const rdPC = await ragResPC.json()
+              ragPC = typeof rdPC?.context === 'string' ? rdPC.context : rdPC?.answer || ''
+            }
+          } catch { /* sin RAG */ }
+          const gptPC = await askGPT({
+            fase: 'info_enviada',
+            leadData: { nombre: leadSnapshot?.nombre, email: leadSnapshot?.email, curso: programaNuevoPC },
+            userMessage: 'Dame información del programa',
+            ragContext: ragPC,
+          })
+          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, gptPC.respuesta, 'info_enviada')
+          return buildProviderResponse(provider, gptPC.respuesta, waNumber)
+        }
+      }
+
       // Contexto RAG para otras fases
       let ragContext = ''
       try {
@@ -1102,6 +1161,45 @@ export async function POST(request: Request) {
       const newStage = getStageForPhase(gpt.siguienteFase)
       if (newStage && leadId) {
         await supabase.from('leads').update({ stage: newStage }).eq('id', leadId)
+      }
+
+      // ── Auto-info: si GPT avanza a info_enviada desde otra fase, enviar la info
+      // en el mismo turno sin esperar otro mensaje del usuario ─────────────────
+      if (phase !== 'info_enviada' && gpt.siguienteFase === 'info_enviada') {
+        const cursoParaInfo = gpt.programa || leadSnapshot?.curso
+        let ragAutoInfo = ''
+        try {
+          const ragUrlAI = new URL('/api/rag/query', new URL(request.url).origin)
+          const ragResAI = await fetch(ragUrlAI.toString(), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              question: `${cursoParaInfo} en Instituto Windsor: costos, horarios, duración, modalidad, certificaciones, campo laboral`,
+              match_count: 15,
+            }),
+            signal: AbortSignal.timeout(8000),
+          })
+          if (ragResAI.ok) {
+            const rdAI = await ragResAI.json()
+            ragAutoInfo = typeof rdAI?.context === 'string' ? rdAI.context : rdAI?.answer || ''
+          }
+        } catch { /* sin RAG */ }
+        const gptInfo = await askGPT({
+          fase: 'info_enviada',
+          leadData: {
+            nombre: gpt.nombre || leadSnapshot?.nombre,
+            email: gpt.email || leadSnapshot?.email,
+            curso: cursoParaInfo,
+          },
+          userMessage: 'Dame información sobre el programa',
+          ragContext: ragAutoInfo,
+        })
+        // Combinar ack del correo + info del programa en un solo mensaje
+        const msgCombinado = gpt.respuesta
+          ? `${gpt.respuesta}\n\n${gptInfo.respuesta}`
+          : gptInfo.respuesta
+        await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, msgCombinado, gptInfo.siguienteFase || 'info_enviada')
+        return buildProviderResponse(provider, msgCombinado, waNumber)
       }
 
       // Si GPT avanza a programa, interceptar
