@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 
 const supabase = createClient();
@@ -18,33 +18,57 @@ function getAvailableBlocks(tipo, date) {
   if (!tipo || !date) return [];
   const dow = date.getDay(); // 0=Dom,1=Lun,2=Mar,3=Mié,4=Jue,5=Vie,6=Sáb
 
+  if (tipo === "inscripcion") {
+    if (dow >= 1 && dow <= 5) {
+      return [
+        { label: "08:00", value: "08:00" },
+        { label: "09:00", value: "09:00" },
+        { label: "10:00", value: "10:00" },
+        { label: "11:00", value: "11:00" },
+        { label: "12:00", value: "12:00" },
+        { label: "13:00", value: "13:00" },
+        { label: "17:00", value: "17:00" },
+        { label: "18:00", value: "18:00" },
+        { label: "19:00", value: "19:00" },
+      ];
+    } else if (dow === 6) {
+      return [
+        { label: "08:00", value: "08:00" },
+        { label: "09:00", value: "09:00" },
+        { label: "10:00", value: "10:00" },
+        { label: "11:00", value: "11:00" },
+        { label: "12:00", value: "12:00" },
+        { label: "13:00", value: "13:00" },
+      ];
+    }
+    return [];
+  }
+
   if (tipo === "adulto") {
     if (dow >= 1 && dow <= 5) {
-      // Lunes a Viernes
       return [
         { label: "10:00–12:00", value: "10:00" },
         { label: "17:00–19:00", value: "17:00" },
       ];
     } else if (dow === 6) {
-      // Sábado
       return [
         { label: "09:00–13:00", value: "09:00" },
         { label: "13:00–17:00", value: "13:00" },
       ];
     }
-    return []; // Domingo sin disponibilidad
-  } else {
-    // Niños: Mar/Mié/Jue → dos bloques · Sáb → un bloque
-    if (dow === 2 || dow === 3 || dow === 4) {
-      return [
-        { label: "13:00–14:00", value: "13:00" },
-        { label: "17:00–18:00", value: "17:00" },
-      ];
-    } else if (dow === 6) {
-      return [{ label: "09:00–13:00", value: "09:00" }];
-    }
     return [];
   }
+
+  // Niños: Mar/Mié/Jue → dos bloques · Sáb → un bloque
+  if (dow === 2 || dow === 3 || dow === 4) {
+    return [
+      { label: "13:00–14:00", value: "13:00" },
+      { label: "17:00–18:00", value: "17:00" },
+    ];
+  } else if (dow === 6) {
+    return [{ label: "09:00–13:00", value: "09:00" }];
+  }
+  return [];
 }
 
 function isDayAvailable(tipo, date) {
@@ -53,21 +77,41 @@ function isDayAvailable(tipo, date) {
 
 export default function AgendarPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const vendedorEmail = params?.vendedor ? decodeURIComponent(String(params.vendedor)) : "";
+
+  // Parámetros del URL enviados por el bot
+  const tipoParam = searchParams.get("tipo") || ""; // 'clase_prueba' | 'inscripcion'
+  const nombreParam = searchParams.get("nombre") || "";
+  const emailParam = searchParams.get("email") || "";
+  const programaParam = searchParams.get("programa") || "";
+  const telefonoParam = searchParams.get("telefono") || "";
+
+  const isInscripcion = tipoParam === "inscripcion";
 
   const today = useMemo(() => new Date(), []);
 
   const [vendedor, setVendedor] = useState(null);
   const [loadingVendedor, setLoadingVendedor] = useState(true);
-  const [tipo, setTipo] = useState(null); // "adulto" | "ninos"
+  // Para clase_prueba el usuario elige adulto/ninos; para inscripcion se deriva del URL
+  const [tipoAlumno, setTipoAlumno] = useState(null); // "adulto" | "ninos"
+  // tipo efectivo para bloques y calendario — derivado, nunca stale
+  const tipo = isInscripcion ? "inscripcion" : tipoAlumno;
   const [calYear, setCalYear] = useState(today.getFullYear());
   const [calMonth, setCalMonth] = useState(today.getMonth());
   const [selectedDate, setSelectedDate] = useState(null);
-  const [selectedTime, setSelectedTime] = useState(null); // block value, e.g. "10:00"
+  const [selectedTime, setSelectedTime] = useState(null);
+  // Pre-llenar con datos del bot (via useEffect para evitar problemas de hidratación)
   const [nombre, setNombre] = useState("");
   const [edad, setEdad] = useState("");
   const [email, setEmail] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
+
+  useEffect(() => {
+    if (nombreParam) setNombre(nombreParam);
+    if (emailParam) setEmail(emailParam);
+    if (telefonoParam) setWhatsapp(telefonoParam);
+  }, [nombreParam, emailParam, telefonoParam]);
   const [notas, setNotas] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -127,12 +171,12 @@ export default function AgendarPage() {
 
   const onConfirm = async () => {
     if (!vendedor) return;
-    if (!tipo) {
+    if (!isInscripcion && !tipoAlumno) {
       setError("Selecciona si es para adulto o niño.");
       return;
     }
     if (!selectedDate || !selectedTime) {
-      setError("Selecciona un día y un horario para tu clase de prueba.");
+      setError(`Selecciona un día y un horario para tu ${isInscripcion ? "visita" : "clase de prueba"}.`);
       return;
     }
     if (!nombre.trim() || !email.trim()) {
@@ -144,12 +188,20 @@ export default function AgendarPage() {
     try {
       const fechaIso = selectedDate.toISOString().slice(0, 10);
       const hora = `${selectedTime}:00`;
-      const cursoLabel = tipo === "adulto" ? "Inglés para adultos" : "Inglés para niños";
+
+      let cursoLabel;
+      if (isInscripcion) {
+        cursoLabel = programaParam || "Inscripción";
+      } else {
+        cursoLabel = tipoAlumno === "adulto" ? "Inglés para adultos" : "Inglés para niños";
+      }
 
       const notasCompletas = [
-        edad.trim() ? `Edad: ${edad.trim()} años` : null,
+        !isInscripcion && edad.trim() ? `Edad: ${edad.trim()} años` : null,
         notas.trim() || null,
       ].filter(Boolean).join("\n");
+
+      const stage = isInscripcion ? "inscripcion_pendiente" : "clase_muestra";
 
       const { data: leadData, error: leadError } = await supabase
         .from("leads")
@@ -160,7 +212,7 @@ export default function AgendarPage() {
           curso: cursoLabel,
           valor: 0,
           notas: notasCompletas,
-          stage: "clase_muestra",
+          stage,
           fecha: fechaIso,
           user_id: vendedor.id,
           asignado_a: vendedor.id,
@@ -174,16 +226,21 @@ export default function AgendarPage() {
         return;
       }
 
+      const citaTipo = isInscripcion ? "inscripcion" : "clase_prueba";
+      const citaTitulo = isInscripcion
+        ? `Visita de inscripción (${cursoLabel}) - ${leadData.nombre}`
+        : `Clase de prueba (${cursoLabel}) - ${leadData.nombre}`;
+
       const { data: citaData, error: citaError } = await supabase
         .from("citas")
         .insert([{
           lead_id: leadData.id,
           vendedor_id: vendedor.id,
-          titulo: `Clase de prueba (${cursoLabel}) - ${leadData.nombre}`,
+          titulo: citaTitulo,
           fecha: fechaIso,
           hora,
-          duracion: 60,
-          tipo: "clase_prueba",
+          duracion: isInscripcion ? 30 : 60,
+          tipo: citaTipo,
           notas: notasCompletas,
           status: "confirmada",
         }])
@@ -198,18 +255,20 @@ export default function AgendarPage() {
 
       setConfirmed({ lead: leadData, cita: citaData });
 
-      try {
-        await fetch("/api/emails/sequence", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            lead_id: leadData.id,
-            email: leadData.email,
-            nombre: leadData.nombre,
-          }),
-        });
-      } catch {
-        // Secuencia opcional; no bloquear confirmación
+      if (!isInscripcion) {
+        try {
+          await fetch("/api/emails/sequence", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              lead_id: leadData.id,
+              email: leadData.email,
+              nombre: leadData.nombre,
+            }),
+          });
+        } catch {
+          // Secuencia opcional; no bloquear confirmación
+        }
       }
     } finally {
       setSubmitting(false);
@@ -219,7 +278,6 @@ export default function AgendarPage() {
   const renderCalendar = () => {
     const cells = [];
 
-    // Encabezados de días
     DAY_LABELS.forEach((label) => {
       cells.push(
         <div
@@ -237,12 +295,10 @@ export default function AgendarPage() {
       );
     });
 
-    // Celdas vacías para el offset del primer día
     for (let i = 0; i < firstDayOfWeek; i++) {
       cells.push(<div key={`empty-${i}`} />);
     }
 
-    // Días del mes
     for (let d = 1; d <= daysInMonth; d++) {
       const date = new Date(calYear, calMonth, d);
       const isPast = date < todayMidnight;
@@ -275,7 +331,6 @@ export default function AgendarPage() {
 
     return (
       <>
-        {/* Navegación de mes */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
           <button
             onClick={() => {
@@ -338,7 +393,7 @@ export default function AgendarPage() {
     }
     const blocks = getAvailableBlocks(tipo, selectedDate);
     if (blocks.length === 0) {
-      return <div style={{ fontSize: 12, color: "#555" }}>No hay clases de prueba disponibles este día.</div>;
+      return <div style={{ fontSize: 12, color: "#555" }}>No hay horarios disponibles este día.</div>;
     }
     return (
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -387,7 +442,6 @@ export default function AgendarPage() {
 
   if (confirmed) {
     const { lead, cita } = confirmed;
-    // Buscar el bloque seleccionado para mostrar el rango completo
     const allBlocks = getAvailableBlocks(tipo, selectedDate);
     const block = allBlocks.find((b) => b.value === selectedTime);
     return (
@@ -398,17 +452,17 @@ export default function AgendarPage() {
             INSTITUTO WINDSOR
           </div>
           <div style={{ fontSize: 12, color: "#777", marginBottom: 24 }}>
-            Tu clase de prueba quedó agendada.
+            {isInscripcion ? "Tu visita de inscripción quedó agendada." : "Tu clase de prueba quedó agendada."}
           </div>
           <div style={{ fontSize: 13, color: "#e0e0e0", marginBottom: 6 }}>{lead.nombre}</div>
           <div style={{ fontSize: 12, color: "#777", marginBottom: 16 }}>{lead.email} · {lead.whatsapp}</div>
-          <div style={{ fontSize: 12, color: "#e0e0e0", marginBottom: 4 }}>Curso: {lead.curso}</div>
+          <div style={{ fontSize: 12, color: "#e0e0e0", marginBottom: 4 }}>Programa: {lead.curso}</div>
           <div style={{ fontSize: 12, color: "#e0e0e0", marginBottom: 4 }}>Fecha: {cita.fecha}</div>
           <div style={{ fontSize: 12, color: "#e0e0e0", marginBottom: 4 }}>
-            Horario: {block ? block.label : cita.hora?.slice(0, 5)}
+            Hora: {block ? block.label : cita.hora?.slice(0, 5)}
           </div>
           <div style={{ fontSize: 12, color: "#777", marginTop: 12 }}>
-            Te enviaremos un recordatorio por WhatsApp y correo electrónico.
+            Te enviaremos un recordatorio por WhatsApp. ¡Nos vemos pronto!
           </div>
         </div>
       </div>
@@ -449,52 +503,64 @@ export default function AgendarPage() {
             Agenda de admisiones
           </div>
           <div style={{ fontSize: 14, color: "#e0e0e0", marginBottom: 4 }}>
-            Agenda tu clase de prueba
+            {isInscripcion ? "Agenda tu visita de inscripción" : "Agenda tu clase de prueba"}
           </div>
           <div style={{ fontSize: 12, color: "#777", marginBottom: 16 }}>
             {vendedor?.nombre || vendedorEmail} · Presencial
+            {isInscripcion && programaParam && (
+              <span style={{ color: "#555", marginLeft: 8 }}>· {programaParam}</span>
+            )}
           </div>
 
-          {/* Selector tipo alumno */}
-          <div style={{ background: "#161616", borderRadius: 10, border: "1px solid #2a2a2a", padding: 16, marginBottom: 16 }}>
-            <div style={{ fontSize: 11, color: "#777", marginBottom: 10 }}>¿Para quién es la clase?</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              {[
-                { value: "adulto", label: "Adulto", sub: "12 años en adelante" },
-                { value: "ninos", label: "Niño", sub: "4 a 12 años" },
-              ].map((opt) => {
-                const isActive = tipo === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    onClick={() => {
-                      setTipo(opt.value);
-                      setSelectedDate(null);
-                      setSelectedTime(null);
-                    }}
-                    style={{
-                      borderRadius: 8,
-                      padding: "10px 8px",
-                      border: `1px solid ${isActive ? "#E8A838" : "#2a2a2a"}`,
-                      background: isActive ? "rgba(232,168,56,0.12)" : "#0e0e0e",
-                      color: isActive ? "#E8A838" : "#777",
-                      cursor: "pointer",
-                      textAlign: "left",
-                    }}
-                  >
-                    <div style={{ fontSize: 12, fontWeight: 500 }}>{opt.label}</div>
-                    <div style={{ fontSize: 10, color: isActive ? "#b07820" : "#444", marginTop: 2 }}>{opt.sub}</div>
-                  </button>
-                );
-              })}
+          {/* Selector tipo alumno — solo para clase de prueba */}
+          {!isInscripcion && (
+            <div style={{ background: "#161616", borderRadius: 10, border: "1px solid #2a2a2a", padding: 16, marginBottom: 16 }}>
+              <div style={{ fontSize: 11, color: "#777", marginBottom: 10 }}>¿Para quién es la clase?</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                {[
+                  { value: "adulto", label: "Adulto", sub: "12 años en adelante" },
+                  { value: "ninos", label: "Niño", sub: "4 a 12 años" },
+                ].map((opt) => {
+                  const isActive = tipoAlumno === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      onClick={() => {
+                        setTipoAlumno(opt.value);
+                        setSelectedDate(null);
+                        setSelectedTime(null);
+                      }}
+                      style={{
+                        borderRadius: 8,
+                        padding: "10px 8px",
+                        border: `1px solid ${isActive ? "#E8A838" : "#2a2a2a"}`,
+                        background: isActive ? "rgba(232,168,56,0.12)" : "#0e0e0e",
+                        color: isActive ? "#E8A838" : "#777",
+                        cursor: "pointer",
+                        textAlign: "left",
+                      }}
+                    >
+                      <div style={{ fontSize: 12, fontWeight: 500 }}>{opt.label}</div>
+                      <div style={{ fontSize: 10, color: isActive ? "#b07820" : "#444", marginTop: 2 }}>{opt.sub}</div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Horarios disponibles info — solo para inscripcion */}
+          {isInscripcion && (
+            <div style={{ background: "#161616", borderRadius: 10, border: "1px solid #2a2a2a", padding: 14, marginBottom: 16, fontSize: 11, color: "#555" }}>
+              🕐 Lun–Vie 8:00–14:00 y 17:00–20:00 &nbsp;|&nbsp; Sáb 8:00–14:00
+            </div>
+          )}
 
           {/* Calendario */}
           <div style={{ background: "#161616", borderRadius: 10, border: "1px solid #2a2a2a", padding: 16 }}>
             <div style={{ fontSize: 11, color: "#777", marginBottom: 12 }}>
               Selecciona un día
-              {tipo === "ninos" && (
+              {!isInscripcion && tipo === "ninos" && (
                 <span style={{ color: "#444", marginLeft: 8 }}>— Mar · Mié · Jue · Sáb</span>
               )}
             </div>
@@ -503,7 +569,9 @@ export default function AgendarPage() {
 
           {/* Bloques de horario */}
           <div style={{ marginTop: 16, background: "#161616", borderRadius: 10, border: "1px solid #2a2a2a", padding: 16 }}>
-            <div style={{ fontSize: 11, color: "#777", marginBottom: 10 }}>Horario disponible</div>
+            <div style={{ fontSize: 11, color: "#777", marginBottom: 10 }}>
+              {isInscripcion ? "Elige tu hora de llegada" : "Horario disponible"}
+            </div>
             {renderBlocks()}
           </div>
         </div>
@@ -511,28 +579,55 @@ export default function AgendarPage() {
         {/* Columna derecha — Formulario */}
         <div>
           <div style={{ background: "#161616", borderRadius: 10, border: "1px solid #2a2a2a", padding: 20 }}>
-            <div style={{ fontSize: 12, color: "#e0e0e0", marginBottom: 16 }}>Datos del prospecto</div>
+            <div style={{ fontSize: 12, color: "#e0e0e0", marginBottom: 16 }}>Tus datos</div>
             <div style={{ display: "grid", gap: 12 }}>
-              <div>
-                <div style={{ fontSize: 10, color: "#555", letterSpacing: 1.5, marginBottom: 6 }}>NOMBRE</div>
-                <input className="input" style={{ width: "100%" }} placeholder="Tu nombre completo" value={nombre} onChange={(e) => setNombre(e.target.value)} />
-              </div>
-              <div>
-                <div style={{ fontSize: 10, color: "#555", letterSpacing: 1.5, marginBottom: 6 }}>EDAD</div>
-                <input className="input" style={{ width: "100%" }} placeholder="Ej. 25" type="number" min="4" max="99" value={edad} onChange={(e) => setEdad(e.target.value)} />
-              </div>
-              <div>
-                <div style={{ fontSize: 10, color: "#555", letterSpacing: 1.5, marginBottom: 6 }}>EMAIL</div>
-                <input className="input" style={{ width: "100%" }} placeholder="tu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} />
-              </div>
-              <div>
-                <div style={{ fontSize: 10, color: "#555", letterSpacing: 1.5, marginBottom: 6 }}>WHATSAPP</div>
-                <input className="input" style={{ width: "100%" }} placeholder="+52 55 XXXX XXXX" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} />
-              </div>
-              <div>
-                <div style={{ fontSize: 10, color: "#555", letterSpacing: 1.5, marginBottom: 6 }}>NOTAS</div>
-                <textarea className="input" style={{ width: "100%", minHeight: 80 }} placeholder="Cuéntanos brevemente qué te interesa mejorar o aprender." value={notas} onChange={(e) => setNotas(e.target.value)} />
-              </div>
+              {/* Si vienen del bot: mostrar como confirmación; si no: campo editable */}
+              {nombreParam ? (
+                <div>
+                  <div style={{ fontSize: 10, color: "#555", letterSpacing: 1.5, marginBottom: 4 }}>NOMBRE</div>
+                  <div style={{ fontSize: 13, color: "#e0e0e0" }}>{nombre}</div>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ fontSize: 10, color: "#555", letterSpacing: 1.5, marginBottom: 6 }}>NOMBRE</div>
+                  <input className="input" style={{ width: "100%" }} placeholder="Tu nombre completo" value={nombre} onChange={(e) => setNombre(e.target.value)} />
+                </div>
+              )}
+              {/* Edad solo para clase de prueba y solo si no viene pre-llenado */}
+              {!isInscripcion && (
+                <div>
+                  <div style={{ fontSize: 10, color: "#555", letterSpacing: 1.5, marginBottom: 6 }}>EDAD</div>
+                  <input className="input" style={{ width: "100%" }} placeholder="Ej. 25" type="number" min="4" max="99" value={edad} onChange={(e) => setEdad(e.target.value)} />
+                </div>
+              )}
+              {emailParam ? (
+                <div>
+                  <div style={{ fontSize: 10, color: "#555", letterSpacing: 1.5, marginBottom: 4 }}>EMAIL</div>
+                  <div style={{ fontSize: 13, color: "#e0e0e0" }}>{email}</div>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ fontSize: 10, color: "#555", letterSpacing: 1.5, marginBottom: 6 }}>EMAIL</div>
+                  <input className="input" style={{ width: "100%" }} placeholder="tu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+                </div>
+              )}
+              {telefonoParam ? (
+                <div>
+                  <div style={{ fontSize: 10, color: "#555", letterSpacing: 1.5, marginBottom: 4 }}>WHATSAPP</div>
+                  <div style={{ fontSize: 13, color: "#e0e0e0" }}>{whatsapp}</div>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ fontSize: 10, color: "#555", letterSpacing: 1.5, marginBottom: 6 }}>WHATSAPP</div>
+                  <input className="input" style={{ width: "100%" }} placeholder="+52 55 XXXX XXXX" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} />
+                </div>
+              )}
+              {!isInscripcion && (
+                <div>
+                  <div style={{ fontSize: 10, color: "#555", letterSpacing: 1.5, marginBottom: 6 }}>NOTAS</div>
+                  <textarea className="input" style={{ width: "100%", minHeight: 80 }} placeholder="Cuéntanos brevemente qué te interesa mejorar o aprender." value={notas} onChange={(e) => setNotas(e.target.value)} />
+                </div>
+              )}
             </div>
             {error && (
               <div style={{ marginTop: 12, fontSize: 11, color: "#E85D38" }}>{error}</div>
@@ -543,7 +638,7 @@ export default function AgendarPage() {
               onClick={onConfirm}
               disabled={submitting}
             >
-              {submitting ? "Agendando..." : "Confirmar clase de prueba →"}
+              {submitting ? "Agendando..." : isInscripcion ? "Confirmar visita →" : "Confirmar clase de prueba →"}
             </button>
           </div>
         </div>

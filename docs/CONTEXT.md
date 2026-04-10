@@ -138,7 +138,7 @@ La lógica de roles se basa en el campo `rol` en `profiles` y/o metadatos de usu
     - Webhook estable: `https://crm.windsor.edu.mx/api/whatsapp/webhook`
   - Webhook entrante: `app/api/whatsapp/webhook/route.ts`
     - Soporta `POST` de Twilio (form-data) y `GET/POST` de Meta Cloud API para verificación + mensajes entrantes.
-    - Crea leads automáticamente con el número de WhatsApp.
+    - Crea leads automáticamente con el número de WhatsApp (**GRUPO 4a**): número nuevo → lead con `stage: contactado`, `asignado_a` al admin por defecto (`DEFAULT_LEAD_ASIGNADO_A` / `WHATSAPP_DEFAULT_ADMIN_USER_ID` o primer `profiles.rol = admin`), registro en `lead_activities` con `event_type: primer_contacto`. No duplica si ya existe un lead con el mismo `whatsapp`.
     - **Modo humano**: si la conversación tiene `modo_humano = true`, solo registra el mensaje y no responde (el vendedor contesta desde el CRM).
     - **Captura flexible de datos**: si el prospecto escribe nombre, programa o correo en el mismo mensaje, el webhook intenta guardarlos sin obligarlo a seguir un formato rígido.
     - **Intenciones globales**: detecta antes solicitudes de asesor humano y expresiones de no interés para actualizar la conversación y el stage sin esperar a una fase específica.
@@ -184,6 +184,7 @@ La lógica de roles se basa en el campo `rol` en `profiles` y/o metadatos de usu
   - `WHATSAPP_PROVIDER`
   - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_NUMBER`
   - `META_WHATSAPP_ACCESS_TOKEN`, `META_WHATSAPP_PHONE_NUMBER_ID`, `META_WHATSAPP_VERIFY_TOKEN`, `META_WHATSAPP_BUSINESS_ACCOUNT_ID`
+  - Opcional — asignación de leads nuevos desde WhatsApp: `DEFAULT_LEAD_ASIGNADO_A` o `WHATSAPP_DEFAULT_ADMIN_USER_ID` (UUID de `profiles.id` del admin/asesor por defecto; si falta, se usa el primer perfil con `rol = admin`).
 
 - RLS (Row Level Security) clave:
   - `profiles`: política de lectura pública para página `/agendar/[vendedor]`.

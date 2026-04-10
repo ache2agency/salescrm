@@ -87,9 +87,19 @@ type LeadSnapshot = {
   email?: string | null
   curso?: string | null
   stage?: string | null
+  whatsapp?: string | null
 }
 
-const AGENDAR_LINK = 'https://crm.windsor.edu.mx/agendar/hola@windsor.edu.mx'
+const AGENDAR_BASE = 'https://crm.windsor.edu.mx/agendar/hola@windsor.edu.mx'
+
+function buildAgendarLink(tipo: string, nombre?: string | null, email?: string | null, programa?: string | null, telefono?: string | null): string {
+  const p = new URLSearchParams({ tipo })
+  if (nombre) p.set('nombre', nombre)
+  if (email) p.set('email', email)
+  if (programa) p.set('programa', programa)
+  if (telefono) p.set('telefono', telefono)
+  return `${AGENDAR_BASE}?${p.toString()}`
+}
 const BOT_SIGNATURE = 'Instituto Windsor'
 
 function hasLeadName(nombre: string | null | undefined, whatsapp: string | null | undefined) {
@@ -119,7 +129,7 @@ function getNextDataPhase(lead: LeadSnapshot | null | undefined, whatsapp: strin
 function getStageForPhase(phase: string | null | undefined) {
   switch (phase) {
     case 'saludo':
-      return 'nuevo'
+      return 'contactado'
     case 'programa':
     case 'correo':
       return 'contactado'
@@ -144,6 +154,123 @@ function isMetaWebhookPayload(payload: unknown) {
       'object' in payload &&
       (payload as { object?: string }).object === 'whatsapp_business_account'
   )
+}
+
+// ─── NOTIFICACIONES AL ASESOR ────────────────────────────────────────────────
+
+type NotifyEvent =
+  | 'lead_pide_humano'
+  | 'inscripcion_confirmada'
+  | 'examen_confirmado'
+  | 'cita_agendada'
+  | 'nuevo_lead'
+
+const NOTIFY_LABELS: Record<NotifyEvent, string> = {
+  lead_pide_humano:      '🙋 Lead pide hablar con un asesor',
+  inscripcion_confirmada:'🎉 Lead confirmó pago y documentos',
+  examen_confirmado:     '📝 Lead confirmó que realizó el examen de ubicación',
+  cita_agendada:         '📅 Lead agendó una cita',
+  nuevo_lead:            '👋 Nuevo lead por WhatsApp',
+}
+
+async function notifyAsesor(
+  supabase: Awaited<ReturnType<typeof createServiceRoleClient>>,
+  leadId: string,
+  evento: NotifyEvent,
+  leadNombre: string | null | undefined,
+  leadWhatsapp: string | null | undefined,
+  leadPrograma: string | null | undefined
+) {
+  try {
+    // 1. Registrar en lead_activities (visible en CRM)
+    await supabase.from('lead_activities').insert([{
+      lead_id: leadId,
+      actor_id: null,
+      event_type: evento,
+      title: NOTIFY_LABELS[evento],
+      detail: [
+        leadNombre ? `Lead: ${leadNombre}` : null,
+        leadPrograma ? `Programa: ${leadPrograma}` : null,
+        leadWhatsapp ? `WhatsApp: ${leadWhatsapp}` : null,
+      ].filter(Boolean).join(' | '),
+      meta: { source: 'bot', evento },
+    }])
+
+    // 2. Obtener el asesor asignado al lead y su número de WhatsApp
+    const { data: lead } = await supabase
+      .from('leads')
+      .select('asignado_a')
+      .eq('id', leadId)
+      .maybeSingle()
+
+    if (!lead?.asignado_a) return
+
+    const { data: perfil } = await supabase
+      .from('profiles')
+      .select('whatsapp, nombre')
+      .eq('id', lead.asignado_a)
+      .maybeSingle()
+
+    const asesorWhatsapp = perfil?.whatsapp as string | null | undefined
+    if (!asesorWhatsapp) return
+
+    // 3. Enviar WhatsApp al asesor
+    const msgAsesor = [
+      NOTIFY_LABELS[evento],
+      leadNombre ? `👤 ${leadNombre}` : null,
+      leadPrograma ? `📚 ${leadPrograma}` : null,
+      leadWhatsapp ? `📱 ${leadWhatsapp}` : null,
+    ].filter(Boolean).join('\n')
+
+    const provider = getWhatsAppProvider()
+    if (provider === 'meta') {
+      const metaConfig = getMetaConfig()
+      if (metaConfig) {
+        await sendMetaWhatsAppMessage({ to: asesorWhatsapp, body: msgAsesor })
+      }
+    } else {
+      // Twilio
+      const accountSid = process.env.TWILIO_ACCOUNT_SID
+      const authToken = process.env.TWILIO_AUTH_TOKEN
+      const from = process.env.TWILIO_WHATSAPP_FROM
+      if (accountSid && authToken && from) {
+        await fetch(
+          `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              Authorization: `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString('base64')}`,
+            },
+            body: new URLSearchParams({
+              From: `whatsapp:${from}`,
+              To: `whatsapp:${asesorWhatsapp}`,
+              Body: msgAsesor,
+            }).toString(),
+          }
+        )
+      }
+    }
+  } catch (e) {
+    console.error('[notifyAsesor]', evento, e)
+  }
+}
+
+/** Admin / asesor por defecto para leads nuevos desde WhatsApp (env o primer perfil con rol admin). */
+async function getDefaultAssigneeId(
+  supabase: Awaited<ReturnType<typeof createServiceRoleClient>>
+): Promise<string | null> {
+  const fromEnv =
+    process.env.DEFAULT_LEAD_ASIGNADO_A?.trim() ||
+    process.env.WHATSAPP_DEFAULT_ADMIN_USER_ID?.trim()
+  if (fromEnv) return fromEnv
+  const { data } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('rol', 'admin')
+    .limit(1)
+    .maybeSingle()
+  return (data?.id as string | undefined) ?? null
 }
 
 async function parseIncomingWhatsAppMessage(
@@ -301,43 +428,71 @@ const CATALOGO_OFERTA = `¿Cuál de nuestras ofertas educativas te interesa?
 •Enseñanza del idioma inglés
 •Enseñanza del idioma español`
 
-const INSCRIPCION_LICS_MSG = `🔴PROCESO DE INSCRIPCIÓN LICENCIATURAS🔴
+const INSCRIPCION_LICS_MSG = `🎉 ¡Felicidades por tomar esta decisión!
 
-Antes que nada, ¡felicidades por tomar acción en tu crecimiento profesional y personal! Estamos seguros que tomaste la decisión correcta. 🎉
+¿Cómo prefieres hacer tu inscripción?
 
-Para empezar tu proceso de inscripción vas a necesitar los siguientes archivos:
+*A)* En línea desde aquí 💻
+*B)* Presencial en las instalaciones 🏫`
 
-📄 *Acta de nacimiento*
-Nombre del archivo: "Acta de nacimiento (tu nombre)"
+const INSCRIPCION_ONLINE_MSG = `¡Perfecto! Aquí está todo lo que necesitas:
 
-📄 *Certificado de bachillerato*
-Nombre del archivo: "Certificado de bachillerato (tu nombre)"
+*📄 Documentos necesarios:*
+1. Acta de nacimiento
+2. Certificado de bachillerato
+3. Comprobante de pago de inscripción
 
-📄 *Comprobante de pago*
-Nombre del archivo: "Comprobante de pago (tu nombre)"
-
-🏦 Información bancaria:
+*🏦 Información bancaria:*
 https://drive.google.com/file/d/1Hj9rRk1zHMWGnG_CjF287W-hxY2AoTe9/view?usp=drivesdk
 
-🔵 ¿Ya tienes todos los documentos? Sigue estos pasos:
+*📋 Pasos a seguir:*
+1️⃣ Realiza el pago de inscripción con los datos bancarios del enlace anterior.
+2️⃣ Ingresa a https://www.windsor.edu.mx/solicitud-de-inscripcion y llena la *Solicitud de Inscripción para Licenciaturas* — ahí podrás adjuntar tus documentos directamente.
+3️⃣ Confírmanos aquí por WhatsApp cuando hayas completado el formulario.
+4️⃣ Un asesor revisará todo y confirmará tu inscripción. 😊`
 
-1️⃣ Ingresa a https://www.windsor.edu.mx/solicitud-de-inscripcion y llena la "Solicitud de inscripción licenciaturas"
+function buildInscripcionPresencialMsg(nombre?: string | null, email?: string | null, programa?: string | null, telefono?: string | null): string {
+  const link = buildAgendarLink('inscripcion', nombre, email, programa, telefono)
+  return `¡Perfecto! Para tu inscripción presencial necesitas traer los siguientes documentos:
 
-2️⃣ Envíanos un mensaje por este medio cuando hayas terminado.
+📄 Acta de Nacimiento (original y 2 copias)
+📄 Certificado de Bachillerato (original y 2 copias)
+📄 2 Copias de la CURP (al 200%)
+📷 6 Fotografías tamaño infantil blanco y negro
+📁 1 Sobre-bolsa tamaño oficio plastificado
+📝 Llenar la solicitud de inscripción
 
-¡Listo, ya eres parte de la familia Windsor! 🎉🎉🎉
-¡¡BIENVENID@!!`
+Te esperamos en cualquiera de nuestros planteles:
 
-const CLASE_PRUEBA_MSG = `¡Me gustaría invitarte a una clase de prueba! 🎉
+🏢 *Chilpancingo:* Sofía Tena #1, Col. Viguri
+🏢 *Iguala:* Ignacio Zaragoza 99, Col. Centro
 
-Tendrás la oportunidad de conocer a tu profesor(a) y socializar con tus compañeros. La idea es que experimentes nuestro servicio antes de tomar una decisión.
+🕐 *Horarios:* Lun–Vie 8:00–14:00 y 17:00–20:00 | Sáb 8:00–14:00
 
-✅ *Completamente GRATUITA*
+👉 Agenda tu visita aquí:
+${link}`
+}
+
+// Pendiente: agregar link del PDF del examen cuando el usuario lo proporcione
+const EXAMEN_UBICACION_MSG = `¡Perfecto! 😊 El examen de ubicación es completamente *gratuito* y te tomará solo unos minutos.
+
+Te enviamos las instrucciones paso a paso para realizarlo:
+
+📄 *Instrucciones del examen:* [PENDIENTE — link PDF]
+
+Una vez que lo termines, confírmanos aquí por WhatsApp y te agendaremos tu clase de prueba gratuita. 🎓`
+
+function buildClasePruebaMsg(nombre?: string | null, email?: string | null, programa?: string | null, telefono?: string | null): string {
+  const link = buildAgendarLink('clase_prueba', nombre, email, programa, telefono)
+  return `¡Excelente! 🎉 Ahora te invitamos a vivir una *clase de prueba gratuita*.
+
+Tendrás la oportunidad de conocer a tu profesor(a), la metodología y a tus futuros compañeros — sin compromiso.
 
 👉 Agenda tu clase aquí:
-${AGENDAR_LINK}
+${link}
 
 ¿Te animas? 😊`
+}
 
 type GptBotResult = {
   respuesta: string
@@ -379,21 +534,25 @@ async function askGPT(params: {
   const faseInstruccion: Record<string, string> = {
     saludo: 'Saluda brevemente y pide el nombre del prospecto.',
 
-    programa: `Ya tienes el nombre. Lista TODOS los programas de la BASE DE CONOCIMIENTO exactamente como aparecen, sin omitir ninguno y sin inventar.
-Si el prospecto mencionó una categoría (ej: licenciaturas), lista solo los de esa categoría.
-Si no mencionó nada, muestra toda la oferta organizada por categoría.
-No resumas, no parafrasees — usa los nombres reales de la BASE.
-Al final pregunta cuál le interesa.`,
+    programa: `Ya tienes el nombre.
+Si el prospecto dice "inglés" o "ingles" sin especificar más, NO asumas cuál — pregunta cuál de las tres opciones le interesa:
+A) Inglés para adultos  B) Inglés para niños  C) Licenciatura en Inglés
+En ese caso el campo "programa" debe ser null y siguienteFase: programa.
+Si el prospecto mencionó un programa específico y sin ambigüedad (ej: "psicología", "inglés para niños", "maestría en innovación"), extráelo en el campo "programa" y responde brevemente confirmando su elección. siguienteFase: correo.
+Si NO mencionó ningún programa, el campo "programa" debe ser null y pide amablemente que elija uno. siguienteFase: programa.
+NO listes el catálogo tú mismo — eso se maneja de forma separada.`,
 
     correo: `El prospecto eligió un programa. ANTES de dar información del programa, pide su correo electrónico brevemente para dar seguimiento personalizado.
+Si el prospecto proporciona su correo en este mensaje, acusa recibo calurosamente antes de avanzar (ej. "¡Perfecto, ya tengo tu correo!") — captura el email en el campo "email" del JSON y pon siguienteFase: info_enviada.
 Si no lo quiere dar, da una respuesta evasiva, o dice que no tiene, avanza de todas formas a info_enviada.
 No menciones el programa todavía — solo pide el correo.`,
 
-    info_enviada: `Da TODA la información del programa usando la BASE DE CONOCIMIENTO:
-duración, costos (inscripción y mensualidad), horarios, modalidad, certificaciones, campo laboral.
-Al terminar, presenta estas dos opciones:
+    info_enviada: `Da la información del programa usando la BASE DE CONOCIMIENTO: duración, costos (inscripción y mensualidad), horarios, modalidad, certificaciones, campo laboral.
+NO incluyas el proceso de inscripción ni links de pago — eso se envía en otro paso.
+SIEMPRE termina el mensaje con exactamente estas dos opciones, sin excepción:
 A) Tengo dudas sobre el programa
-B) Quiero inscribirme [si es programa de inglés, usa "B) Quiero agendar mi clase de prueba gratuita"]`,
+B) Quiero inscribirme
+(Si el programa es inglés adultos, inglés niños o cualquier curso de idiomas, cambia B por: "B) Quiero agendar mi clase de prueba gratuita" y pon siguienteFase: accion)`,
 
     dudas: `Responde la duda con datos concretos de la BASE (costos, horarios, requisitos, etc.).
 Al terminar, vuelve a presentar:
@@ -417,8 +576,12 @@ Flujo:
 3. Si ya tienes el teléfono: confirma que un asesor lo llamará en ~1 hora desde uno de los números de los planteles.
 Captura el teléfono en el campo "telefono" del JSON.`,
 
-    seguimiento: 'Retoma la conversación y recuérdale el siguiente paso.',
-    cerrado: 'La conversación está cerrada. Si escribe, pregunta si puedes ayudarle en algo más.',
+    seguimiento: `Responde cualquier pregunta del prospecto usando la BASE DE CONOCIMIENTO.
+Si menciona un programa diferente al que tenía, da información sobre ese nuevo programa con entusiasmo.
+Si pregunta sobre costos, horarios, requisitos, modalidad — responde con detalle usando la BASE.
+Si quiere inscribirse → siguienteFase: inscripcion. Si quiere clase de prueba (solo inglés) → siguienteFase: clase_prueba.
+Si no hay una pregunta clara, recuérdale amablemente el siguiente paso según su programa.`,
+    cerrado: 'La conversación está cerrada. Pregunta amablemente si puedes ayudarle en algo más. Si el prospecto pide hablar con alguien, quiere más información o retoma el interés, pon requestedHuman: true y siguienteFase: asesor.',
     perdido: 'El prospecto no estaba interesado. Si vuelve a escribir, responde con amabilidad.',
   }
 
@@ -445,6 +608,7 @@ QUÉ HACER AHORA: ${faseInstruccion[params.fase] ?? 'Responde de forma natural y
 
 ${params.ragContext ? `BASE DE CONOCIMIENTO (úsala si es relevante):\n${params.ragContext}\n` : ''}
 REGLAS:
+- Formato WhatsApp únicamente: usa *negrita* (un asterisco), nunca **negrita** ni encabezados con #.
 - Mensajes cortos en fases de captura (saludo, correo). Más detallado en info_enviada y dudas.
 - No vuelvas a pedir datos que ya tienes.
 - Si da nombre + programa + correo juntos, captúralos todos.
@@ -465,6 +629,10 @@ Responde ÚNICAMENTE con JSON válido:
   "requestedHuman": false,
   "noInterest": false
 }`
+
+  console.log('[BOT PROMPT] fase:', params.fase)
+  console.log('[BOT SYSTEM PROMPT]', systemPrompt)
+  console.log('[BOT USER MESSAGE]', params.userMessage)
 
   const chatRes = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -549,7 +717,7 @@ export async function POST(request: Request) {
         // Verificar si ya existe un lead con este WhatsApp
         const { data: existingLead } = await supabase
           .from('leads')
-          .select('id, nombre, email, curso, stage')
+          .select('id, nombre, email, curso, stage, whatsapp')
           .eq('whatsapp', whatsappValue)
           .maybeSingle()
 
@@ -559,6 +727,7 @@ export async function POST(request: Request) {
         if (!leadId) {
           const today = new Date().toISOString().slice(0, 10)
           const nombre = profileName || whatsappValue
+          const defaultAssignee = await getDefaultAssigneeId(supabase)
 
           const { data: insertedLead } = await supabase
             .from('leads')
@@ -570,15 +739,35 @@ export async function POST(request: Request) {
                 curso: 'WhatsApp - Instituto Windsor',
                 valor: 0,
                 notas: 'Lead creado automáticamente desde WhatsApp.',
-                stage: 'nuevo',
+                stage: 'contactado',
                 fecha: today,
+                ...(defaultAssignee ? { asignado_a: defaultAssignee } : {}),
               },
             ])
-            .select('id, nombre, email, curso, stage')
+            .select('id, nombre, email, curso, stage, whatsapp')
             .single()
 
           leadId = insertedLead?.id
           leadSnapshot = (insertedLead as LeadSnapshot | null) || null
+
+          if (leadId) {
+            const { error: activityError } = await supabase.from('lead_activities').insert([
+              {
+                lead_id: leadId,
+                actor_id: null,
+                event_type: 'primer_contacto',
+                title: 'Primer contacto',
+                detail: 'Contacto entrante por WhatsApp.',
+                meta: { source: 'whatsapp', provider },
+              },
+            ])
+            if (activityError) {
+              console.error('[webhook whatsapp] lead_activities primer_contacto', activityError)
+            }
+            // Notificar al asesor del nuevo lead
+            await notifyAsesor(supabase, leadId, 'nuevo_lead',
+              insertedLead?.nombre, whatsappValue, insertedLead?.curso)
+          }
         }
 
         const desiredPhase = getNextDataPhase(leadSnapshot, whatsappValue)
@@ -761,8 +950,54 @@ export async function POST(request: Request) {
     if (conversacionIdOuter && waNumber) {
       const supabase = createServiceRoleClient()
 
-      // Fase programa: catálogo hardcodeado, sin RAG
+      // Detección global de "inglés" ambiguo — sin importar la fase, si no hay programa capturado aún
+      if (!hasLeadProgram(leadSnapshot?.curso)) {
+        const msgLower0 = originalText.toLowerCase()
+        if (/ingl[eé]s/i.test(msgLower0) && !/ni[ñn]o|adulto|licenciatura|lic\b/i.test(msgLower0)) {
+          const disambig = `Tenemos tres opciones de inglés, ¿cuál te interesa?\n\nA) Inglés para adultos\nB) Inglés para niños\nC) Licenciatura en Inglés`
+          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, disambig, phase)
+          return buildProviderResponse(provider, disambig, waNumber)
+        }
+      }
+
+      // Fase programa: si el usuario ya nombró un programa, saltar catálogo; si no, catálogo hardcodeado
       if (phase === 'programa') {
+        const msgLower = originalText.toLowerCase()
+        const mencionaIngles = /ingl[eé]s/i.test(msgLower)
+        const especificaIngles = /ni[ñn]o|adulto|licenciatura|lic\b/i.test(msgLower)
+        if (mencionaIngles && !especificaIngles) {
+          const disambig = `Tenemos tres opciones de inglés, ¿cuál te interesa?\n\nA) Inglés para adultos\nB) Inglés para niños\nC) Licenciatura en Inglés`
+          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, disambig, 'programa')
+          return buildProviderResponse(provider, disambig, waNumber)
+        }
+
+        const programaGpt = await askGPT({
+          fase: 'programa',
+          leadData: {
+            nombre: leadSnapshot?.nombre,
+            email: leadSnapshot?.email,
+            curso: leadSnapshot?.curso,
+          },
+          userMessage: originalText,
+          ragContext: '',
+        })
+
+        if (programaGpt.programa && programaGpt.siguienteFase === 'correo') {
+          // Programa específico sin ambigüedad — guardar y avanzar a correo
+          if (leadId) {
+            await supabase.from('leads').update({ curso: programaGpt.programa }).eq('id', leadId)
+          }
+          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, programaGpt.respuesta, 'correo')
+          return buildProviderResponse(provider, programaGpt.respuesta, waNumber)
+        }
+
+        if (programaGpt.siguienteFase === 'programa' && programaGpt.respuesta) {
+          // GPT tiene una respuesta específica (ej. disambiguación) — usarla, quedarse en programa
+          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, programaGpt.respuesta, 'programa')
+          return buildProviderResponse(provider, programaGpt.respuesta, waNumber)
+        }
+
+        // Sin programa identificado — catálogo hardcodeado
         const nombre = leadSnapshot?.nombre
         const botMessage = nombre
           ? `${nombre}, aquí está nuestra oferta educativa:\n\n${CATALOGO_OFERTA}`
@@ -771,13 +1006,58 @@ export async function POST(request: Request) {
         return buildProviderResponse(provider, botMessage, waNumber)
       }
 
+      // Elección A/B de inscripción — interceptar antes de GPT cuando fase es inscripcion
+      if (phase === 'inscripcion') {
+        const msgI = originalText.toLowerCase()
+        if (/\ba\b|en l[ií]nea|online|desde aqu[ií]|digital|virtual/i.test(msgI)) {
+          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, INSCRIPCION_ONLINE_MSG, 'inscripcion')
+          return buildProviderResponse(provider, INSCRIPCION_ONLINE_MSG, waNumber)
+        }
+        if (/\bb\b|mejor b|presencial|instalaci[oó]n|ir a|plantel|visitar/i.test(msgI)) {
+          const msgP = buildInscripcionPresencialMsg(leadSnapshot?.nombre, leadSnapshot?.email, leadSnapshot?.curso, leadSnapshot?.whatsapp)
+          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, msgP, 'inscripcion')
+          return buildProviderResponse(provider, msgP, waNumber)
+        }
+        if (/ya.*llen[eé]|ya.*hice|ya.*complet|listo|ya.*pagu[eé]|ya.*realic[eé]/i.test(msgI)) {
+          const nombreLead = leadSnapshot?.nombre || ''
+          const msg = `¡Perfecto${nombreLead ? ' ' + nombreLead : ''}! 🎉 Un asesor revisará tu información y confirmará tu inscripción en breve. ¡Bienvenid@ a la familia Windsor!`
+          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, msg, 'seguimiento')
+          if (leadId) {
+            await notifyAsesor(supabase, leadId, 'inscripcion_confirmada',
+              leadSnapshot?.nombre, waNumber, leadSnapshot?.curso)
+          }
+          return buildProviderResponse(provider, msg, waNumber)
+        }
+      }
+
       // Contexto RAG para otras fases
       let ragContext = ''
       try {
         const ragUrl = new URL('/api/rag/query', new URL(request.url).origin)
-        const isInfoPhase = ['info_enviada', 'dudas', 'correo'].includes(phase)
+        const isInfoPhase = ['info_enviada', 'dudas', 'correo', 'seguimiento'].includes(phase)
         const matchCount = isInfoPhase ? 15 : 5
-        const ragQuestion = isInfoPhase && leadSnapshot?.curso
+        const detectPrograma = (msg: string, fallback: string | null | undefined): string => {
+          const m = msg.toLowerCase()
+          if (/ni[ñn]o/i.test(m)) return 'Inglés para niños'
+          if (/adulto/i.test(m)) return 'Inglés para adultos'
+          if (/licenciatura.*ingl[eé]s|ingl[eé]s.*licenciatura|\blic\b.*ingl[eé]s|ingl[eé]s.*\blic\b/i.test(m)) return 'Licenciatura en Inglés'
+          if (/franc[eé]s/i.test(m)) return 'Francés'
+          if (/italian/i.test(m)) return 'Italiano'
+          if (/psicolog/i.test(m)) return 'Psicología'
+          if (/turism/i.test(m)) return 'Administración turística'
+          if (/relaciones p[uú]blicas|mercadotecnia/i.test(m)) return 'Relaciones públicas y mercadotecnia'
+          if (/innovaci[oó]n empresarial/i.test(m)) return 'Maestría en Innovación empresarial'
+          if (/maestr[ií]a/i.test(m)) return 'maestrías'
+          if (/licenciatura/i.test(m)) return 'licenciaturas'
+          if (/diplomado/i.test(m)) return 'diplomados'
+          return fallback || ''
+        }
+        const queryPrograma = (phase === 'dudas' || phase === 'seguimiento')
+          ? detectPrograma(originalText, leadSnapshot?.curso)
+          : leadSnapshot?.curso || ''
+        const ragQuestion = queryPrograma && (phase === 'dudas' || phase === 'seguimiento')
+          ? `${queryPrograma} en Instituto Windsor: ${originalText}`
+          : isInfoPhase && leadSnapshot?.curso
           ? `${leadSnapshot.curso} en Instituto Windsor: costos, horarios, duración, modalidad, certificaciones, campo laboral`
           : (leadSummary ? `${leadSummary}\n\n${originalText}` : originalText)
         const ragRes = await fetch(ragUrl.toString(), {
@@ -824,33 +1104,84 @@ export async function POST(request: Request) {
         await supabase.from('leads').update({ stage: newStage }).eq('id', leadId)
       }
 
-      // Si GPT avanza a programa, interceptar y devolver catálogo hardcodeado
+      // Si GPT avanza a programa, interceptar
       if (gpt.siguienteFase === 'programa') {
+        if (gpt.nombre && leadId && !hasLeadName(leadSnapshot?.nombre, waNumber)) {
+          await supabase.from('leads').update({ nombre: gpt.nombre, stage: 'contactado' }).eq('id', leadId)
+        }
+        // "inglés" ambiguo — preguntar cuál de las tres opciones
+        const msgLower2 = originalText.toLowerCase()
+        if (/ingl[eé]s/i.test(msgLower2) && !/ni[ñn]o|adulto|licenciatura|lic\b/i.test(msgLower2)) {
+          const disambig = `Tenemos tres opciones de inglés, ¿cuál te interesa?\n\nA) Inglés para adultos\nB) Inglés para niños\nC) Licenciatura en Inglés`
+          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, disambig, 'programa')
+          return buildProviderResponse(provider, disambig, waNumber)
+        }
+        // Si el usuario ya nombró un programa específico sin ambigüedad, saltar catálogo e ir a correo
+        if (gpt.programa && leadId) {
+          await supabase.from('leads').update({ curso: gpt.programa }).eq('id', leadId)
+          const correoMsg = gpt.respuesta || `¡Perfecto! Para contarte todo sobre ${gpt.programa}, ¿me compartes tu correo para darte seguimiento personalizado?`
+          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, correoMsg, 'correo')
+          return buildProviderResponse(provider, correoMsg, waNumber)
+        }
+        // Sin programa identificado — catálogo hardcodeado
         const nombre = gpt.nombre || leadSnapshot?.nombre
         const botMessage = nombre
           ? `${nombre}, aquí está nuestra oferta educativa:\n\n${CATALOGO_OFERTA}`
           : CATALOGO_OFERTA
-        if (gpt.nombre && leadId && !hasLeadName(leadSnapshot?.nombre, waNumber)) {
-          await supabase.from('leads').update({ nombre: gpt.nombre, stage: 'contactado' }).eq('id', leadId)
-        }
         await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, botMessage, 'correo')
         return buildProviderResponse(provider, botMessage, waNumber)
       }
 
-      // Mensajes hardcoded para fases específicas
+      // Interceptores de fases — mensajes hardcodeados
       let botMessage = gpt.respuesta
       let nextFase = gpt.siguienteFase
-      if (nextFase === 'inscripcion') {
-        botMessage = INSCRIPCION_LICS_MSG
-        nextFase = 'cerrado'
+
+      if (nextFase === 'examen') {
+        // Track A idiomas: enviar instrucciones de examen de ubicación
+        botMessage = EXAMEN_UBICACION_MSG
       } else if (nextFase === 'clase_prueba') {
-        botMessage = CLASE_PRUEBA_MSG
-        nextFase = 'cerrado'
+        // Track A idiomas: invitar a clase de prueba (después del examen)
+        botMessage = buildClasePruebaMsg(leadSnapshot?.nombre, leadSnapshot?.email, leadSnapshot?.curso, leadSnapshot?.whatsapp)
+        nextFase = 'clase_prueba'
+      } else if (nextFase === 'inscripcion') {
+        // Track B: proceso de inscripción con opción online o presencial
+        botMessage = INSCRIPCION_LICS_MSG
+      } else if (nextFase === 'inscripcion_online') {
+        botMessage = INSCRIPCION_ONLINE_MSG
+        nextFase = 'seguimiento'
+      } else if (nextFase === 'inscripcion_presencial') {
+        botMessage = buildInscripcionPresencialMsg(leadSnapshot?.nombre, leadSnapshot?.email, leadSnapshot?.curso, leadSnapshot?.whatsapp)
+        nextFase = 'seguimiento'
+      } else if (nextFase === 'inscripcion_confirmada') {
+        const nombreLead = leadSnapshot?.nombre || ''
+        botMessage = `¡Perfecto${nombreLead ? ' ' + nombreLead : ''}! 🎉 Recibimos tu información. Un asesor revisará todo y te confirmará tu inscripción en breve. ¡Bienvenid@ a la familia Windsor!`
+        nextFase = 'seguimiento'
       }
 
       // Persistir teléfono si fue capturado en fase asesor
       if (gpt.telefono && leadId) {
         await supabase.from('leads').update({ whatsapp: gpt.telefono }).eq('id', leadId)
+      }
+
+      // Notificaciones al asesor según el evento
+      if (leadId) {
+        if (gpt.requestedHuman) {
+          // Activar modo humano en la conversación
+          await supabase
+            .from('whatsapp_conversaciones')
+            .update({ modo_humano: true })
+            .eq('id', conversacionIdOuter)
+          await notifyAsesor(supabase, leadId, 'lead_pide_humano',
+            leadSnapshot?.nombre, waNumber, leadSnapshot?.curso)
+        }
+        if (nextFase === 'inscripcion_confirmada' || (phase === 'inscripcion' && /ya.*llen[eé]|ya.*hice|ya.*complet|listo|ya.*pagu[eé]|ya.*realic[eé]/i.test(originalText))) {
+          await notifyAsesor(supabase, leadId, 'inscripcion_confirmada',
+            leadSnapshot?.nombre, waNumber, leadSnapshot?.curso)
+        }
+        if (gpt.siguienteFase === 'clase_prueba') {
+          await notifyAsesor(supabase, leadId, 'examen_confirmado',
+            leadSnapshot?.nombre, waNumber, leadSnapshot?.curso)
+        }
       }
 
       await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, botMessage, nextFase)
