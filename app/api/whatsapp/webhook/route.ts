@@ -1313,8 +1313,8 @@ export async function POST(request: Request) {
         // Sin programa identificado — catálogo hardcodeado
         const nombre = leadSnapshot?.nombre
         const botMessage = nombre
-          ? `${nombre}, aquí está nuestra oferta educativa:\n\n${CATALOGO_OFERTA}`
-          : CATALOGO_OFERTA
+          ? `¡Hola ${nombre}! 😊 ¿Qué programa de Instituto Windsor te interesa?\n\n${CATALOGO_OFERTA}`
+          : `¡Hola! 😊 ¿Qué programa de Instituto Windsor te interesa?\n\n${CATALOGO_OFERTA}`
         await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, botMessage, 'programa')
         return buildProviderResponse(provider, botMessage, waNumber)
       }
@@ -1592,8 +1592,8 @@ export async function POST(request: Request) {
         // Sin programa identificado — catálogo hardcodeado
         const nombre = gpt.nombre || leadSnapshot?.nombre
         const botMessage = nombre
-          ? `${nombre}, aquí está nuestra oferta educativa:\n\n${CATALOGO_OFERTA}`
-          : CATALOGO_OFERTA
+          ? `¡Hola ${nombre}! 😊 ¿Qué programa de Instituto Windsor te interesa?\n\n${CATALOGO_OFERTA}`
+          : `¡Hola! 😊 ¿Qué programa de Instituto Windsor te interesa?\n\n${CATALOGO_OFERTA}`
         await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, botMessage, 'programa')
         return buildProviderResponse(provider, botMessage, waNumber)
       }
