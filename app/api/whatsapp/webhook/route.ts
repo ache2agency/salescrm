@@ -360,6 +360,238 @@ async function buildProviderResponse(
   return buildTwiml(message)
 }
 
+// ─── INFO_MSGS: fuente de verdad por programa (igual que el lab) ─────────────
+// Para programas conocidos usamos esto directamente — sin GPT/RAG —
+// para garantizar que siempre incluya promo y sea consistente.
+
+const INFO_MSGS: Record<string, string> = {
+  'Inglés para adultos': `¡Excelente elección! 😊 Te comparto la información de nuestro Curso de Inglés:
+
+*📚 Curso de Inglés para Adultos*
+Dirigido a personas de 13 años en adelante
+
+*🎓 Modalidad:* Presencial y Online
+
+*🕐 Horarios presenciales:*
+• Matutino: 10:00 - 12:00 hrs
+• Vespertino: 17:00 - 19:00 hrs
+• Sabatino: 09:00 - 13:00 hrs
+
+*🛜 Horarios online:*
+• Vespertino: 17:00 - 19:00 hrs
+• Sabatino: 09:00 - 13:00 hrs
+
+*⏳ Duración:* 5 meses (10 meses sabatino)
+
+*💰 Inversión:*
+• Inscripción: $750
+• Mensualidad desde $990
+
+*🎉 Promoción del mes:*
+• Inscripción: ~$750~ → $375 (50% de descuento)
+• ¡Primer mes gratis!
+
+Al terminar obtienes un Diploma con validez oficial.`,
+
+  'Inglés para niños': `¡Qué gran decisión para el futuro de tu hij@! 😊 Te comparto la información de nuestro Curso de Inglés para Niños:
+
+*📚 Curso de Inglés para Niños*
+Dirigido a niños de 4 a 12 años
+
+*🎓 Modalidad:* Presencial y Online
+
+*🕐 Horarios presenciales:*
+• Martes a jueves: 13:00 - 14:00 hrs o 17:00 - 18:00 hrs
+• Sabatino: 09:00 - 13:00 hrs
+
+*🛜 Horarios online:*
+• Lunes a jueves: 17:00 - 18:00 hrs
+• Sabatino: 09:00 - 13:00 hrs
+
+*⏳ Duración:* 5 meses
+
+*💰 Inversión:*
+• Inscripción: $800
+• Mensualidad: $780
+
+*🎉 Promoción del mes:*
+• Inscripción: ~$800~ → $400 (50% de descuento)
+• ¡Primer mes gratis!
+
+Al terminar obtiene un Diploma con validez oficial.`,
+
+  'Psicología': `¡Excelente elección! 😊 Te comparto la información de nuestra Licenciatura en Psicología:
+
+*🎓 Licenciatura en Psicología*
+Modalidad: Presencial | Duración: 3 años
+
+*🕐 Horarios:* Matutino y Sabatino
+
+*💰 Inversión:*
+• Inscripción semestral: $2,300 (incluye credencial)
+• Mensualidad: $2,750
+
+*🎉 Promoción del mes:*
+• Inscripción: ~$2,300~ → $690 (70% de descuento)
+• Mensualidad: ~$2,750~ → $1,925 (30% de descuento)
+
+*💼 Campo laboral:* Salud, educación, medio ambiente, producción, consumo y convivencia social.
+
+📄 Plan de estudios: https://drive.google.com/file/d/1mw16jhbwN3K2dBy3ajcb3qREOPVXZ9rb/view`,
+
+  'Licenciatura en Inglés': `¡Excelente elección! 😊 Te comparto la información de nuestra Licenciatura en Inglés:
+
+*🎓 Licenciatura en Inglés*
+Modalidad: Presencial | Duración: 3 años
+
+*🕐 Horarios:* Matutino, Vespertino y Sabatino
+
+*💰 Inversión:*
+• Inscripción semestral: $2,150 (incluye credencial)
+• Mensualidad: $2,650
+
+*🎉 Promoción del mes:*
+• Inscripción: ~$2,150~ → $645 (70% de descuento)
+• Mensualidad: ~$2,650~ → $1,855 (30% de descuento)
+
+*💼 Campo laboral:* Docente, traductor, asesor editorial, call centers, centros de investigación y organismos internacionales.
+
+📄 Plan de estudios: https://drive.google.com/file/d/1M_K1sIqh-8LgZdTsiAmIRMOkVIiTw295/view`,
+
+  'Licenciatura en Inglés online': `¡Excelente elección! 😊 Te comparto la información de nuestra Licenciatura en Inglés Online:
+
+*🎓 Licenciatura en Inglés*
+Modalidad: Online | Duración: 3 años
+
+*💰 Inversión:*
+• Inscripción semestral: $2,150 (incluye credencial)
+• Mensualidad: $2,650
+
+*🎉 Promoción del mes:*
+• Inscripción: ~$2,150~ → $645 (70% de descuento)
+• Mensualidad: ~$2,650~ → $1,855 (30% de descuento)
+
+*💼 Campo laboral:* Docente, traductor, asesor editorial, call centers, centros de investigación y organismos internacionales.
+
+📄 Plan de estudios: https://drive.google.com/file/d/1wy4BiHspFFBZ3d1dBfO0ki-koDhR3MNg/view`,
+
+  'Administración turística': `¡Excelente elección! 😊 Te comparto la información de nuestra Licenciatura en Administración Turística:
+
+*🎓 Licenciatura en Administración Turística*
+Modalidad: Presencial | Duración: 3 años
+
+*🕐 Horarios:* Matutino, Vespertino y Sabatino
+
+*💰 Inversión:*
+• Inscripción semestral: $2,200 (incluye credencial)
+• Mensualidad: $2,650
+
+*🎉 Promoción del mes:*
+• Inscripción: ~$2,200~ → $660 (70% de descuento)
+• Mensualidad: ~$2,650~ → $1,855 (30% de descuento)
+
+*💼 Campo laboral:* Agencias de viajes, hoteles, resorts, operadores turísticos, eventos y convenciones.
+
+📄 Plan de estudios: https://drive.google.com/file/d/1FMFbZ4pupnqkD_X1pBUcxlVo0HmRxUPb/view`,
+
+  'Administración turística online': `¡Excelente elección! 😊 Te comparto la información de nuestra Licenciatura en Administración Turística Online:
+
+*🎓 Licenciatura en Administración Turística*
+Modalidad: Online | Duración: 3 años
+
+*💰 Inversión:*
+• Inscripción semestral: $2,200 (incluye credencial)
+• Mensualidad: $2,650
+
+*🎉 Promoción del mes:*
+• Inscripción: ~$2,200~ → $660 (70% de descuento)
+• Mensualidad: ~$2,650~ → $1,855 (30% de descuento)
+
+*💼 Campo laboral:* Agencias de viajes, hoteles, resorts, operadores turísticos, eventos y convenciones.
+
+📄 Plan de estudios: https://drive.google.com/file/d/1JEhS0iVIkATLicd6wqGqUXcHyB_lzT4C/view`,
+
+  'Relaciones públicas y mercadotecnia': `¡Excelente elección! 😊 Te comparto la información de nuestra Licenciatura en Relaciones Públicas y Mercadotecnia:
+
+*🎓 Licenciatura en Relaciones Públicas y Mercadotecnia*
+Modalidad: Presencial | Duración: 3 años
+
+*🕐 Horarios:* Matutino, Vespertino y Sabatino
+
+*💰 Inversión:*
+• Inscripción semestral: $2,300 (incluye credencial)
+• Mensualidad: $2,750
+
+*🎉 Promoción del mes:*
+• Inscripción: ~$2,300~ → $690 (70% de descuento)
+• Mensualidad: ~$2,750~ → $1,925 (30% de descuento)
+
+*✨ Incluye 3 certificaciones:* Marketing digital, creación de páginas web y diseño gráfico.
+
+*💼 Campo laboral:* Agencias de publicidad, marketing, medios de comunicación, gobierno, tecnología, entretenimiento.
+
+📄 Plan de estudios: https://drive.google.com/file/d/1tv2023m30ZVHJRryfwhNm6tT9wICHvnZ/view`,
+
+  'Relaciones públicas y mercadotecnia online': `¡Excelente elección! 😊 Te comparto la información de nuestra Licenciatura en Relaciones Públicas y Mercadotecnia Online:
+
+*🎓 Licenciatura en Relaciones Públicas y Mercadotecnia*
+Modalidad: Online | Duración: 3 años
+
+*💰 Inversión:*
+• Inscripción semestral: $2,300 (incluye credencial)
+• Mensualidad: $2,750
+
+*🎉 Promoción del mes:*
+• Inscripción: ~$2,300~ → $690 (70% de descuento)
+• Mensualidad: ~$2,750~ → $1,925 (30% de descuento)
+
+*✨ Incluye 3 certificaciones:* Marketing digital, creación de páginas web y diseño gráfico.
+
+*💼 Campo laboral:* Agencias de publicidad, marketing, medios de comunicación, gobierno, tecnología, entretenimiento.
+
+📄 Plan de estudios: https://drive.google.com/file/d/18VDNvOjsG39KdHr31VxfYHlJJC83TKgt/view`,
+
+  'Bachillerato': `¡Excelente elección! 😊 Te comparto la información de nuestra Prepa Windsor:
+
+*🎓 Bachillerato — Prepa Windsor*
+Modalidad: Presencial | Duración: 2 años
+
+*🕐 Horarios:* Matutino y Vespertino
+
+*💰 Inversión:*
+• Inscripción cuatrimestral: $1,100 (incluye credencial)
+• Mensualidad: $1,800
+
+*🎉 Promoción del mes:*
+• Inscripción: ~$1,100~ → $550 (50% de descuento)
+• Mensualidad: ~$1,800~ → $1,440 (20% de descuento)
+
+📄 Más información: https://drive.google.com/file/d/1txVAaLEpi-WPTybWtSKKMu3mn6fC5TkK/view`,
+}
+
+/** Programas de idiomas (Track A): después del info van a examen de ubicación */
+function esInglesIdioma(programa: string | null | undefined): boolean {
+  return /ingl[eé]s para (ni[ñn]os?|adultos?)/i.test(programa || '')
+}
+
+/** CTA siempre en código, nunca delegado a GPT */
+function buildCTA(programa: string | null | undefined): string {
+  const opcionB = esInglesIdioma(programa)
+    ? '*B)* Agendar mi examen de ubicación gratuito 📝'
+    : '*B)* Quiero inscribirme ✍️'
+  return `\n\n¿Cómo te gustaría continuar?\n*A)* Tengo dudas 🤔\n${opcionB}`
+}
+
+function eligeB(msg: string): boolean {
+  const m = msg.toLowerCase()
+  return /\bb\b|opci[oó]n.*b|\b2\b|quiero.*clase|clase.*prueba|quiero inscrib|inscribirme|agendar.*examen|examen.*ubicaci[oó]n|quiero.*agendar|prueba.*gratuita/.test(m)
+}
+
+function eligeA(msg: string): boolean {
+  const m = msg.toLowerCase()
+  return /\ba\b|opci[oó]n.*a|\b1\b|tengo duda|más duda|tengo preguntas/.test(m)
+}
+
 // ─── GPT-4o como cerebro del bot ─────────────────────────────────────────────
 
 const CATALOGO_OFERTA = `¿Cuál de nuestras ofertas educativas te interesa?
@@ -1009,6 +1241,40 @@ export async function POST(request: Request) {
         return buildProviderResponse(provider, botMessage, waNumber)
       }
 
+      // ── Fase accion: elegir A (dudas) o B (inscripción/examen) ───────────────
+      if (phase === 'accion') {
+        if (eligeB(originalText)) {
+          if (esInglesIdioma(leadSnapshot?.curso)) {
+            await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, EXAMEN_UBICACION_MSG, 'examen')
+            return buildProviderResponse(provider, EXAMEN_UBICACION_MSG, waNumber)
+          } else {
+            await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, INSCRIPCION_LICS_MSG, 'inscripcion')
+            return buildProviderResponse(provider, INSCRIPCION_LICS_MSG, waNumber)
+          }
+        }
+        if (eligeA(originalText)) {
+          // Deja que GPT maneje la duda con RAG — sigue al bloque principal
+        } else {
+          // Respuesta inesperada: repetir CTA
+          const ctaRepeat = buildCTA(leadSnapshot?.curso)
+          const msg = `${leadSnapshot?.nombre ? leadSnapshot.nombre + ', ' : ''}¿cuál de estas opciones te interesa?${ctaRepeat}`
+          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, msg, 'accion')
+          return buildProviderResponse(provider, msg, waNumber)
+        }
+      }
+
+      // ── Fase info_enviada: usar INFO_MSG hardcodeado si existe ────────────────
+      if (phase === 'info_enviada') {
+        const infoMsg = leadSnapshot?.curso ? INFO_MSGS[leadSnapshot.curso] : null
+        if (infoMsg) {
+          const cta = buildCTA(leadSnapshot?.curso)
+          const msgFull = infoMsg + cta
+          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, msgFull, 'accion')
+          return buildProviderResponse(provider, msgFull, waNumber)
+        }
+        // Fallback a RAG+GPT para maestrías, diplomados, francés, italiano
+      }
+
       // Elección A/B de inscripción — interceptar antes de GPT cuando fase es inscripcion
       if (phase === 'inscripcion') {
         const msgI = originalText.toLowerCase()
@@ -1067,6 +1333,15 @@ export async function POST(request: Request) {
               await supabase.from('leads').update({ curso: programaNuevoPC }).eq('id', leadId)
               leadSnapshot = { ...leadSnapshot, curso: programaNuevoPC } as LeadSnapshot
             }
+            // Usar INFO_MSG hardcodeado si existe; fallback a RAG+GPT
+            const infoMsgPC = INFO_MSGS[programaNuevoPC]
+            if (infoMsgPC) {
+              const ctaPC = buildCTA(programaNuevoPC)
+              const msgPC = infoMsgPC + ctaPC
+              await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, msgPC, 'accion')
+              return buildProviderResponse(provider, msgPC, waNumber)
+            }
+            // Fallback RAG+GPT para programas sin INFO_MSG
             let ragPC = ''
             try {
               const ragUrlPC = new URL('/api/rag/query', new URL(request.url).origin)
@@ -1090,8 +1365,9 @@ export async function POST(request: Request) {
               userMessage: 'Dame información del programa',
               ragContext: ragPC,
             })
-            await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, gptPC.respuesta, 'info_enviada')
-            return buildProviderResponse(provider, gptPC.respuesta, waNumber)
+            const msgPCFull = gptPC.respuesta + buildCTA(programaNuevoPC)
+            await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, msgPCFull, 'accion')
+            return buildProviderResponse(provider, msgPCFull, waNumber)
           }
         }
       }
@@ -1190,10 +1466,21 @@ export async function POST(request: Request) {
         await supabase.from('leads').update({ stage: newStage }).eq('id', leadId)
       }
 
-      // ── Auto-info: solo desde fase correo → info_enviada, para no esperar
-      // otro mensaje del usuario antes de enviar la info del programa ──────────
+      // ── Auto-info: correo → info_enviada, enviar info en el mismo turno ───────
       if (phase === 'correo' && gpt.siguienteFase === 'info_enviada') {
         const cursoParaInfo = gpt.programa || leadSnapshot?.curso
+        const ackCorreo = gpt.respuesta  // "¡Perfecto, ya tengo tu correo!"
+
+        // Usar INFO_MSG hardcodeado si existe (más confiable que RAG+GPT)
+        const infoMsgAI = cursoParaInfo ? INFO_MSGS[cursoParaInfo] : null
+        if (infoMsgAI) {
+          const ctaAI = buildCTA(cursoParaInfo)
+          const msgFinal = ackCorreo ? `${ackCorreo}\n\n${infoMsgAI}${ctaAI}` : infoMsgAI + ctaAI
+          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, msgFinal, 'accion')
+          return buildProviderResponse(provider, msgFinal, waNumber)
+        }
+
+        // Fallback RAG+GPT para programas sin INFO_MSG
         let ragAutoInfo = ''
         try {
           const ragUrlAI = new URL('/api/rag/query', new URL(request.url).origin)
@@ -1213,20 +1500,15 @@ export async function POST(request: Request) {
         } catch { /* sin RAG */ }
         const gptInfo = await askGPT({
           fase: 'info_enviada',
-          leadData: {
-            nombre: gpt.nombre || leadSnapshot?.nombre,
-            email: gpt.email || leadSnapshot?.email,
-            curso: cursoParaInfo,
-          },
+          leadData: { nombre: gpt.nombre || leadSnapshot?.nombre, email: gpt.email || leadSnapshot?.email, curso: cursoParaInfo },
           userMessage: 'Dame información sobre el programa',
           ragContext: ragAutoInfo,
         })
-        // Combinar ack del correo + info del programa en un solo mensaje
-        const msgCombinado = gpt.respuesta
-          ? `${gpt.respuesta}\n\n${gptInfo.respuesta}`
-          : gptInfo.respuesta
-        await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, msgCombinado, gptInfo.siguienteFase || 'info_enviada')
-        return buildProviderResponse(provider, msgCombinado, waNumber)
+        const msgCombinadoFallback = ackCorreo
+          ? `${ackCorreo}\n\n${gptInfo.respuesta}${buildCTA(cursoParaInfo)}`
+          : gptInfo.respuesta + buildCTA(cursoParaInfo)
+        await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, msgCombinadoFallback, 'accion')
+        return buildProviderResponse(provider, msgCombinadoFallback, waNumber)
       }
 
       // Si GPT avanza a programa, interceptar
