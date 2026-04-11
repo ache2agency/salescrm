@@ -765,7 +765,7 @@ async function askGPT(params: {
   if (!OPENAI_API_KEY) throw new Error('No OPENAI_API_KEY')
 
   const faseInstruccion: Record<string, string> = {
-    saludo: 'Saluda brevemente y pide el nombre del prospecto.',
+    saludo: 'Si el prospecto ya mencionó su nombre en este mensaje, extráelo en el campo "nombre" y avanza (siguienteFase: programa). Si aún no ha dado su nombre, saluda brevemente y pídelo.',
 
     programa: `Ya tienes el nombre.
 Si el prospecto dice "inglés" o "ingles" sin especificar más, NO asumas cuál — pregunta cuál de las tres opciones le interesa:
@@ -1237,7 +1237,7 @@ export async function POST(request: Request) {
         const botMessage = nombre
           ? `${nombre}, aquí está nuestra oferta educativa:\n\n${CATALOGO_OFERTA}`
           : CATALOGO_OFERTA
-        await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, botMessage, 'correo')
+        await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, botMessage, 'programa')
         return buildProviderResponse(provider, botMessage, waNumber)
       }
 
@@ -1535,7 +1535,7 @@ export async function POST(request: Request) {
         const botMessage = nombre
           ? `${nombre}, aquí está nuestra oferta educativa:\n\n${CATALOGO_OFERTA}`
           : CATALOGO_OFERTA
-        await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, botMessage, 'correo')
+        await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, botMessage, 'programa')
         return buildProviderResponse(provider, botMessage, waNumber)
       }
 
