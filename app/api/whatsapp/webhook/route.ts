@@ -1288,6 +1288,14 @@ export async function POST(request: Request) {
         })
 
         if (programaGpt.programa && programaGpt.siguienteFase === 'correo') {
+          // Si GPT capturó "inglés" genérico sin variante, forzar disambiguación
+          const esInglesGenerico = /^ingl[eé]s$/i.test(programaGpt.programa.trim()) &&
+            !/ni[ñn]o|adulto|licenciatura/i.test(programaGpt.programa)
+          if (esInglesGenerico) {
+            const disambig = `Tenemos tres opciones de inglés, ¿cuál te interesa?\n\nA) Inglés para adultos\nB) Inglés para niños\nC) Licenciatura en Inglés`
+            await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, disambig, 'programa')
+            return buildProviderResponse(provider, disambig, waNumber)
+          }
           // Programa específico sin ambigüedad — guardar y avanzar a correo
           if (leadId) {
             await supabase.from('leads').update({ curso: programaGpt.programa }).eq('id', leadId)
