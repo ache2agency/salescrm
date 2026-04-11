@@ -1031,61 +1031,68 @@ export async function POST(request: Request) {
         }
       }
 
-      // ── Interceptor global: cambio de programa en fases post-captura ─────────
-      // Si el usuario menciona un programa distinto al guardado, forzar info_enviada
+      // ── Interceptor: cambio de programa con intención explícita ──────────────
+      // Solo dispara si el mensaje es corto Y contiene palabras de interés —
+      // evita falsos positivos cuando el usuario solo menciona un programa de pasada
       if (['info_enviada', 'dudas', 'accion', 'seguimiento'].includes(phase)) {
-        const detectProgramaCambio = (msg: string): string | null => {
-          const m = msg.toLowerCase()
-          if (/ingl[eé]s.*ni[ñn]o|ni[ñn]o.*ingl[eé]s/i.test(msg)) return 'Inglés para niños'
-          if (/ingl[eé]s.*adulto|adulto.*ingl[eé]s/i.test(msg)) return 'Inglés para adultos'
-          if (/licenciatura.*ingl[eé]s|ingl[eé]s.*licenciatura|\blic\b.*ingl[eé]s/i.test(msg)) return 'Licenciatura en Inglés'
-          if (/franc[eé]s/i.test(m)) return 'Francés'
-          if (/italian[oa]/i.test(m)) return 'Italiano'
-          if (/psicolog/i.test(m)) return 'Psicología'
-          if (/administraci[oó]n tur[ií]stica|turism/i.test(m)) return 'Administración turística'
-          if (/relaciones p[uú]blicas/i.test(m)) return 'Relaciones públicas y mercadotecnia'
-          if (/innovaci[oó]n empresarial/i.test(m)) return 'Maestría en Innovación empresarial'
-          if (/multiculturalidad|pluriling/i.test(m)) return 'Maestría en Multiculturalidad y plurilingüismo'
-          if (/bachillerato/i.test(m)) return 'Bachillerato'
-          if (/diplomado/i.test(m)) return 'Diplomados'
-          return null
-        }
-        const programaNuevoPC = detectProgramaCambio(originalText)
-        const programaActualPC = (leadSnapshot?.curso || '').toLowerCase().trim()
-        if (
-          programaNuevoPC &&
-          programaNuevoPC.toLowerCase() !== programaActualPC &&
-          programaActualPC !== 'whatsapp - instituto windsor'
-        ) {
-          if (leadId) {
-            await supabase.from('leads').update({ curso: programaNuevoPC }).eq('id', leadId)
-            leadSnapshot = { ...leadSnapshot, curso: programaNuevoPC } as LeadSnapshot
+        const wordCount = originalText.trim().split(/\s+/).length
+        const tieneInteres = /me interesa|quiero (saber|info|información|conocer)|cuéntame|y el de|y la de|cámbia|cambia|mejor el|mejor la|en cambio|ahora (el|la)|qué tal el|qué tal la|y (el|la) de/i.test(originalText)
+        // Solo disparar si el mensaje es corto (≤6 palabras) O tiene palabras de interés explícito
+        if (wordCount <= 6 || tieneInteres) {
+          const detectProgramaCambio = (msg: string): string | null => {
+            const m = msg.toLowerCase()
+            if (/ingl[eé]s.*ni[ñn]o|ni[ñn]o.*ingl[eé]s/i.test(msg)) return 'Inglés para niños'
+            if (/ingl[eé]s.*adulto|adulto.*ingl[eé]s/i.test(msg)) return 'Inglés para adultos'
+            if (/licenciatura.*ingl[eé]s|ingl[eé]s.*licenciatura|\blic\b.*ingl[eé]s/i.test(msg)) return 'Licenciatura en Inglés'
+            if (/franc[eé]s/i.test(m)) return 'Francés'
+            if (/italian[oa]/i.test(m)) return 'Italiano'
+            if (/psicolog/i.test(m)) return 'Psicología'
+            if (/administraci[oó]n tur[ií]stica|turism/i.test(m)) return 'Administración turística'
+            if (/relaciones p[uú]blicas/i.test(m)) return 'Relaciones públicas y mercadotecnia'
+            if (/innovaci[oó]n empresarial/i.test(m)) return 'Maestría en Innovación empresarial'
+            if (/multiculturalidad|pluriling/i.test(m)) return 'Maestría en Multiculturalidad y plurilingüismo'
+            if (/bachillerato/i.test(m)) return 'Bachillerato'
+            if (/diplomado/i.test(m)) return 'Diplomados'
+            return null
           }
-          let ragPC = ''
-          try {
-            const ragUrlPC = new URL('/api/rag/query', new URL(request.url).origin)
-            const ragResPC = await fetch(ragUrlPC.toString(), {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                question: `${programaNuevoPC} en Instituto Windsor: costos, horarios, duración, modalidad, certificaciones, campo laboral`,
-                match_count: 15,
-              }),
-              signal: AbortSignal.timeout(8000),
-            })
-            if (ragResPC.ok) {
-              const rdPC = await ragResPC.json()
-              ragPC = typeof rdPC?.context === 'string' ? rdPC.context : rdPC?.answer || ''
+          const programaNuevoPC = detectProgramaCambio(originalText)
+          const programaActualPC = (leadSnapshot?.curso || '').toLowerCase().trim()
+          if (
+            programaNuevoPC &&
+            programaNuevoPC.toLowerCase() !== programaActualPC &&
+            programaActualPC !== 'whatsapp - instituto windsor' &&
+            programaActualPC !== ''
+          ) {
+            if (leadId) {
+              await supabase.from('leads').update({ curso: programaNuevoPC }).eq('id', leadId)
+              leadSnapshot = { ...leadSnapshot, curso: programaNuevoPC } as LeadSnapshot
             }
-          } catch { /* sin RAG */ }
-          const gptPC = await askGPT({
-            fase: 'info_enviada',
-            leadData: { nombre: leadSnapshot?.nombre, email: leadSnapshot?.email, curso: programaNuevoPC },
-            userMessage: 'Dame información del programa',
-            ragContext: ragPC,
-          })
-          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, gptPC.respuesta, 'info_enviada')
-          return buildProviderResponse(provider, gptPC.respuesta, waNumber)
+            let ragPC = ''
+            try {
+              const ragUrlPC = new URL('/api/rag/query', new URL(request.url).origin)
+              const ragResPC = await fetch(ragUrlPC.toString(), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  question: `${programaNuevoPC} en Instituto Windsor: costos, horarios, duración, modalidad, certificaciones, campo laboral`,
+                  match_count: 15,
+                }),
+                signal: AbortSignal.timeout(8000),
+              })
+              if (ragResPC.ok) {
+                const rdPC = await ragResPC.json()
+                ragPC = typeof rdPC?.context === 'string' ? rdPC.context : rdPC?.answer || ''
+              }
+            } catch { /* sin RAG */ }
+            const gptPC = await askGPT({
+              fase: 'info_enviada',
+              leadData: { nombre: leadSnapshot?.nombre, email: leadSnapshot?.email, curso: programaNuevoPC },
+              userMessage: 'Dame información del programa',
+              ragContext: ragPC,
+            })
+            await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, gptPC.respuesta, 'info_enviada')
+            return buildProviderResponse(provider, gptPC.respuesta, waNumber)
+          }
         }
       }
 
@@ -1163,9 +1170,9 @@ export async function POST(request: Request) {
         await supabase.from('leads').update({ stage: newStage }).eq('id', leadId)
       }
 
-      // ── Auto-info: si GPT avanza a info_enviada desde otra fase, enviar la info
-      // en el mismo turno sin esperar otro mensaje del usuario ─────────────────
-      if (phase !== 'info_enviada' && gpt.siguienteFase === 'info_enviada') {
+      // ── Auto-info: solo desde fase correo → info_enviada, para no esperar
+      // otro mensaje del usuario antes de enviar la info del programa ──────────
+      if (phase === 'correo' && gpt.siguienteFase === 'info_enviada') {
         const cursoParaInfo = gpt.programa || leadSnapshot?.curso
         let ragAutoInfo = ''
         try {
