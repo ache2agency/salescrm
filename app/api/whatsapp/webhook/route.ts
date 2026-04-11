@@ -1185,6 +1185,45 @@ export async function POST(request: Request) {
     if (conversacionIdOuter && waNumber) {
       const supabase = createServiceRoleClient()
 
+      // Cargar historial de conversación (necesario para programa y fases posteriores)
+      let convHistory: Array<{ role: 'user' | 'assistant'; content: string }> = []
+      try {
+        const { data: histMsgs } = await supabase
+          .from('whatsapp_mensajes')
+          .select('rol, contenido')
+          .eq('conversacion_id', conversacionIdOuter)
+          .order('created_at', { ascending: false })
+          .limit(6)
+        if (histMsgs) {
+          convHistory = histMsgs
+            .reverse()
+            .map((m) => ({
+              role: (m.rol === 'usuario' ? 'user' : 'assistant') as 'user' | 'assistant',
+              content: String(m.contenido || ''),
+            }))
+        }
+      } catch { /* sin historial */ }
+
+      // ── Fase saludo: captura de nombre en código (sin GPT) ─────────────────
+      if (phase === 'saludo') {
+        const words = originalText.trim().split(/\s+/)
+        const isGreeting = /^\s*(hola|hey|ola|buenas|buenos|buen[oa])\b/i.test(originalText.trim())
+        const hasProgramKeyword = /ingl[eé]s|psicolog|turism|relaciones|bachillerato|maestr[ií]a|diplomado|administraci[oó]n|idiom|franc[eé]s|italian/i.test(originalText)
+        const hasDigits = /\d/.test(originalText)
+        const looksLikeName = !isGreeting && !hasProgramKeyword && !hasDigits && !/@/.test(originalText) && words.length >= 1 && words.length <= 3
+
+        if (looksLikeName) {
+          const nombreCapturado = originalText.trim()
+          if (leadId) {
+            await supabase.from('leads').update({ nombre: nombreCapturado }).eq('id', leadId)
+            leadSnapshot = { ...leadSnapshot, nombre: nombreCapturado } as LeadSnapshot
+          }
+          const greeting = `¡Hola ${nombreCapturado}! 😊 ¿Qué programa de Instituto Windsor te interesa?\n\n${CATALOGO_OFERTA}`
+          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, greeting, 'programa')
+          return buildProviderResponse(provider, greeting, waNumber)
+        }
+      }
+
       // Detección global de "inglés" ambiguo — sin importar la fase, si no hay programa capturado aún
       if (!hasLeadProgram(leadSnapshot?.curso)) {
         const msgLower0 = originalText.toLowerCase()
@@ -1197,6 +1236,36 @@ export async function POST(request: Request) {
 
       // Fase programa: si el usuario ya nombró un programa, saltar catálogo; si no, catálogo hardcodeado
       if (phase === 'programa') {
+        // A/B/C interceptor: respuestas a la disambiguación de inglés (respuesta de una letra)
+        const msgTrimProg = originalText.trim()
+        if (/^\s*a\s*$/i.test(msgTrimProg)) {
+          if (leadId) {
+            await supabase.from('leads').update({ curso: 'Inglés para adultos' }).eq('id', leadId)
+            leadSnapshot = { ...leadSnapshot, curso: 'Inglés para adultos' } as LeadSnapshot
+          }
+          const ackA = '¡Perfecto! 😊 Te cuento sobre el curso de Inglés para adultos. ¿Me compartes tu correo electrónico para darte seguimiento personalizado?'
+          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, ackA, 'correo')
+          return buildProviderResponse(provider, ackA, waNumber)
+        }
+        if (/^\s*b\s*$/i.test(msgTrimProg)) {
+          if (leadId) {
+            await supabase.from('leads').update({ curso: 'Inglés para niños' }).eq('id', leadId)
+            leadSnapshot = { ...leadSnapshot, curso: 'Inglés para niños' } as LeadSnapshot
+          }
+          const ackB = '¡Qué gran decisión! 😊 Te cuento sobre el curso de Inglés para niños. ¿Me compartes tu correo electrónico para darte seguimiento personalizado?'
+          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, ackB, 'correo')
+          return buildProviderResponse(provider, ackB, waNumber)
+        }
+        if (/^\s*c\s*$/i.test(msgTrimProg)) {
+          if (leadId) {
+            await supabase.from('leads').update({ curso: 'Licenciatura en Inglés' }).eq('id', leadId)
+            leadSnapshot = { ...leadSnapshot, curso: 'Licenciatura en Inglés' } as LeadSnapshot
+          }
+          const ackC = '¡Excelente elección! 😊 Te cuento sobre la Licenciatura en Inglés. ¿Me compartes tu correo electrónico para darte seguimiento personalizado?'
+          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, ackC, 'correo')
+          return buildProviderResponse(provider, ackC, waNumber)
+        }
+
         const msgLower = originalText.toLowerCase()
         const mencionaIngles = /ingl[eé]s/i.test(msgLower)
         const especificaIngles = /ni[ñn]o|adulto|licenciatura|lic\b/i.test(msgLower)
@@ -1215,6 +1284,7 @@ export async function POST(request: Request) {
           },
           userMessage: originalText,
           ragContext: '',
+          history: convHistory,
         })
 
         if (programaGpt.programa && programaGpt.siguienteFase === 'correo') {
@@ -1416,25 +1486,6 @@ export async function POST(request: Request) {
             : (ragData?.answer || '')
         }
       } catch { /* continuar sin RAG */ }
-
-      // Cargar últimos 6 mensajes para dar contexto a GPT (evita pérdida de "Si"/"No")
-      let convHistory: Array<{ role: 'user' | 'assistant'; content: string }> = []
-      try {
-        const { data: histMsgs } = await supabase
-          .from('whatsapp_mensajes')
-          .select('rol, contenido')
-          .eq('conversacion_id', conversacionIdOuter)
-          .order('created_at', { ascending: false })
-          .limit(6)
-        if (histMsgs) {
-          convHistory = histMsgs
-            .reverse()
-            .map((m) => ({
-              role: (m.rol === 'usuario' ? 'user' : 'assistant') as 'user' | 'assistant',
-              content: String(m.contenido || ''),
-            }))
-        }
-      } catch { /* sin historial */ }
 
       // Llamada central a GPT-4o
       const gpt = await askGPT({
