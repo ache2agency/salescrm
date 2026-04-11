@@ -527,6 +527,7 @@ async function askGPT(params: {
   leadData: { nombre?: string | null; email?: string | null; curso?: string | null }
   userMessage: string
   ragContext: string
+  history?: Array<{ role: 'user' | 'assistant'; content: string }>
 }): Promise<GptBotResult> {
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY
   if (!OPENAI_API_KEY) throw new Error('No OPENAI_API_KEY')
@@ -645,6 +646,7 @@ Responde ÚNICAMENTE con JSON válido:
       model: 'gpt-4o',
       messages: [
         { role: 'system', content: systemPrompt },
+        ...(params.history || []),
         { role: 'user', content: params.userMessage },
       ],
       temperature: 0.6,
@@ -1031,14 +1033,12 @@ export async function POST(request: Request) {
         }
       }
 
-      // ── Interceptor: cambio de programa con intención explícita ──────────────
-      // Solo dispara si el mensaje es corto Y contiene palabras de interés —
-      // evita falsos positivos cuando el usuario solo menciona un programa de pasada
-      if (['info_enviada', 'dudas', 'accion', 'seguimiento'].includes(phase)) {
-        const wordCount = originalText.trim().split(/\s+/).length
-        const tieneInteres = /me interesa|quiero (saber|info|información|conocer)|cuéntame|y el de|y la de|cámbia|cambia|mejor el|mejor la|en cambio|ahora (el|la)|qué tal el|qué tal la|y (el|la) de/i.test(originalText)
-        // Solo disparar si el mensaje es corto (≤6 palabras) O tiene palabras de interés explícito
-        if (wordCount <= 6 || tieneInteres) {
+      // ── Interceptor global: cambio de programa (igual que el lab) ────────────
+      // Dispara en fases post-correo si se detecta un programa diferente al actual.
+      // No dispara ante respuestas cortas de CTA (a, b, si, no).
+      if (['info_enviada', 'dudas', 'accion', 'seguimiento', 'inscripcion', 'clase_prueba'].includes(phase)) {
+        const esRespuestaCTA = /^\s*[aAbBsSnN][iIoO]?\s*$/.test(originalText)
+        if (!esRespuestaCTA) {
           const detectProgramaCambio = (msg: string): string | null => {
             const m = msg.toLowerCase()
             if (/ingl[eé]s.*ni[ñn]o|ni[ñn]o.*ingl[eé]s/i.test(msg)) return 'Inglés para niños'
@@ -1046,7 +1046,7 @@ export async function POST(request: Request) {
             if (/licenciatura.*ingl[eé]s|ingl[eé]s.*licenciatura|\blic\b.*ingl[eé]s/i.test(msg)) return 'Licenciatura en Inglés'
             if (/franc[eé]s/i.test(m)) return 'Francés'
             if (/italian[oa]/i.test(m)) return 'Italiano'
-            if (/psicolog/i.test(m)) return 'Psicología'
+            if (/psicolog|psico\b/i.test(m)) return 'Psicología'  // psico + psicología
             if (/administraci[oó]n tur[ií]stica|turism/i.test(m)) return 'Administración turística'
             if (/relaciones p[uú]blicas/i.test(m)) return 'Relaciones públicas y mercadotecnia'
             if (/innovaci[oó]n empresarial/i.test(m)) return 'Maestría en Innovación empresarial'
@@ -1141,6 +1141,25 @@ export async function POST(request: Request) {
         }
       } catch { /* continuar sin RAG */ }
 
+      // Cargar últimos 6 mensajes para dar contexto a GPT (evita pérdida de "Si"/"No")
+      let convHistory: Array<{ role: 'user' | 'assistant'; content: string }> = []
+      try {
+        const { data: histMsgs } = await supabase
+          .from('whatsapp_mensajes')
+          .select('rol, contenido')
+          .eq('conversacion_id', conversacionIdOuter)
+          .order('created_at', { ascending: false })
+          .limit(6)
+        if (histMsgs) {
+          convHistory = histMsgs
+            .reverse()
+            .map((m) => ({
+              role: (m.rol === 'usuario' ? 'user' : 'assistant') as 'user' | 'assistant',
+              content: String(m.contenido || ''),
+            }))
+        }
+      } catch { /* sin historial */ }
+
       // Llamada central a GPT-4o
       const gpt = await askGPT({
         fase: phase,
@@ -1151,6 +1170,7 @@ export async function POST(request: Request) {
         },
         userMessage: originalText,
         ragContext,
+        history: convHistory,
       })
 
       // Persistir datos capturados por GPT
