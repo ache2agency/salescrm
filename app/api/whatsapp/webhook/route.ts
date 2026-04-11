@@ -592,6 +592,39 @@ function eligeA(msg: string): boolean {
   return /\ba\b|opci[oó]n.*a|\b1\b|tengo duda|más duda|tengo preguntas/.test(m)
 }
 
+/** Detecta programa específico en el mensaje (igual que lab) — nunca retorna "inglés" genérico */
+function detectarPrograma(msg: string): string | null {
+  if (/ingl[eé]s para ni[ñn]os?|ni[ñn]os?.*ingl[eé]s|ingl[eé]s.*ni[ñn]os?/i.test(msg)) return 'Inglés para niños'
+  if (/ingl[eé]s para adultos?|adultos?.*ingl[eé]s|ingl[eé]s.*adultos?/i.test(msg)) return 'Inglés para adultos'
+  if (/licenciatura.*ingl[eé]s.*online|ingl[eé]s.*licenciatura.*online|\blic\b.*ingl[eé]s.*online/i.test(msg)) return 'Licenciatura en Inglés online'
+  if (/licenciatura.*ingl[eé]s|ingl[eé]s.*licenciatura|\blic\b.*ingl[eé]s|ingl[eé]s.*\blic\b/i.test(msg)) return 'Licenciatura en Inglés'
+  if (/psicolog|psico\b/i.test(msg)) return 'Psicología'
+  if (/turism.*(online|en l[ií]nea)|(online|en l[ií]nea).*turism/i.test(msg)) return 'Administración turística online'
+  if (/turism/i.test(msg)) return 'Administración turística'
+  if (/(relaciones p[uú]blicas|mercadotecnia).*(online|en l[ií]nea)/i.test(msg)) return 'Relaciones públicas y mercadotecnia online'
+  if (/relaciones p[uú]blicas|mercadotecnia/i.test(msg)) return 'Relaciones públicas y mercadotecnia'
+  if (/franc[eé]s/i.test(msg)) return 'Francés'
+  if (/italian/i.test(msg)) return 'Italiano'
+  if (/innovaci[oó]n empresarial/i.test(msg)) return 'Maestría en Innovación empresarial'
+  if (/multiculturalidad|pluriling/i.test(msg)) return 'Maestría en Multiculturalidad'
+  if (/bachillerato/i.test(msg)) return 'Bachillerato'
+  return null
+}
+
+/** Detecta email en el mensaje */
+function detectarEmail(msg: string): string | null {
+  const match = msg.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)
+  return match ? match[0] : null
+}
+
+/** Detecta si el usuario no quiere dar correo */
+function noQuiereEmail(msg: string): boolean {
+  const m = msg.toLowerCase()
+  if (/no ten|sin correo|no.*correo|no.*email|no.*mail|no quiero|no doy|no hay|no pos|nop/i.test(m)) return true
+  if (!m.includes('@') && /^(info|siguiente|dale|ok|omite|salta|después|despues|luego|no|nada|sin|omitir|skip)$/i.test(m.trim())) return true
+  return false
+}
+
 // ─── GPT-4o como cerebro del bot ─────────────────────────────────────────────
 
 const CATALOGO_OFERTA = `¿Cuál de nuestras ofertas educativas te interesa?
@@ -1266,54 +1299,29 @@ export async function POST(request: Request) {
           return buildProviderResponse(provider, ackC, waNumber)
         }
 
-        const msgLower = originalText.toLowerCase()
-        const mencionaIngles = /ingl[eé]s/i.test(msgLower)
-        const especificaIngles = /ni[ñn]o|adulto|licenciatura|lic\b/i.test(msgLower)
-        if (mencionaIngles && !especificaIngles) {
+        // Inglés ambiguo (igual que lab) — antes de detectarPrograma
+        if (/ingl[eé]s/i.test(originalText) && !/ni[ñn]o|adulto|licenciatura|lic\b/i.test(originalText)) {
           const disambig = `Tenemos tres opciones de inglés, ¿cuál te interesa?\n\nA) Inglés para adultos\nB) Inglés para niños\nC) Licenciatura en Inglés`
           await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, disambig, 'programa')
           return buildProviderResponse(provider, disambig, waNumber)
         }
 
-        const programaGpt = await askGPT({
-          fase: 'programa',
-          leadData: {
-            nombre: leadSnapshot?.nombre,
-            email: leadSnapshot?.email,
-            curso: leadSnapshot?.curso,
-          },
-          userMessage: originalText,
-          ragContext: '',
-          history: convHistory,
-        })
-
-        if (programaGpt.programa && programaGpt.siguienteFase === 'correo') {
-          // Si GPT capturó "inglés" genérico sin variante, forzar disambiguación
-          const esInglesGenerico = /^ingl[eé]s$/i.test(programaGpt.programa.trim()) &&
-            !/ni[ñn]o|adulto|licenciatura/i.test(programaGpt.programa)
-          if (esInglesGenerico) {
-            const disambig = `Tenemos tres opciones de inglés, ¿cuál te interesa?\n\nA) Inglés para adultos\nB) Inglés para niños\nC) Licenciatura en Inglés`
-            await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, disambig, 'programa')
-            return buildProviderResponse(provider, disambig, waNumber)
-          }
-          // Programa específico sin ambigüedad — guardar y avanzar a correo
+        // Detección de programa en código (sin GPT) — igual que lab
+        const programaDetectado = detectarPrograma(originalText)
+        if (programaDetectado) {
           if (leadId) {
-            await supabase.from('leads').update({ curso: programaGpt.programa }).eq('id', leadId)
+            await supabase.from('leads').update({ curso: programaDetectado }).eq('id', leadId)
+            leadSnapshot = { ...leadSnapshot, curso: programaDetectado } as LeadSnapshot
           }
-          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, programaGpt.respuesta, 'correo')
-          return buildProviderResponse(provider, programaGpt.respuesta, waNumber)
+          const correoMsg = `¡Excelente elección! 😊 Para contarte todo sobre *${programaDetectado}*, ¿me compartes tu correo electrónico para darte seguimiento personalizado? 📧`
+          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, correoMsg, 'correo')
+          return buildProviderResponse(provider, correoMsg, waNumber)
         }
 
-        if (programaGpt.siguienteFase === 'programa' && programaGpt.respuesta) {
-          // GPT tiene una respuesta específica (ej. disambiguación) — usarla, quedarse en programa
-          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, programaGpt.respuesta, 'programa')
-          return buildProviderResponse(provider, programaGpt.respuesta, waNumber)
-        }
-
-        // Sin programa identificado — catálogo hardcodeado
-        const nombre = leadSnapshot?.nombre
-        const botMessage = nombre
-          ? `¡Hola ${nombre}! 😊 ¿Qué programa de Instituto Windsor te interesa?\n\n${CATALOGO_OFERTA}`
+        // Sin programa identificado — catálogo hardcodeado (sin GPT)
+        const nombreP = leadSnapshot?.nombre
+        const botMessage = nombreP
+          ? `¡Hola ${nombreP}! 😊 ¿Qué programa de Instituto Windsor te interesa?\n\n${CATALOGO_OFERTA}`
           : `¡Hola! 😊 ¿Qué programa de Instituto Windsor te interesa?\n\n${CATALOGO_OFERTA}`
         await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, botMessage, 'programa')
         return buildProviderResponse(provider, botMessage, waNumber)
@@ -1375,6 +1383,66 @@ export async function POST(request: Request) {
           }
           return buildProviderResponse(provider, msg, waNumber)
         }
+      }
+
+      // ── Fase correo: detección en código, sin GPT ────────────────────────────
+      if (phase === 'correo') {
+        const emailDetectado = detectarEmail(originalText)
+        const quiereSkip = noQuiereEmail(originalText)
+
+        if (emailDetectado || quiereSkip) {
+          // Guardar email si se detectó
+          if (emailDetectado && leadId) {
+            await supabase.from('leads').update({ email: emailDetectado }).eq('id', leadId)
+            leadSnapshot = { ...leadSnapshot, email: emailDetectado } as LeadSnapshot
+          }
+          const cursoInfo = leadSnapshot?.curso
+          const infoMsgCorreo = cursoInfo ? INFO_MSGS[cursoInfo] : null
+          if (infoMsgCorreo) {
+            const ctaCorreo = buildCTA(cursoInfo)
+            const ack = emailDetectado ? '¡Perfecto, ya tengo tu correo! 📧\n\n' : ''
+            const msgFinal = ack + infoMsgCorreo + ctaCorreo
+            await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, msgFinal, 'accion')
+            return buildProviderResponse(provider, msgFinal, waNumber)
+          }
+          // Fallback RAG+GPT para programas sin INFO_MSG (maestrías, diplomados, etc.)
+          let ragCorreo = ''
+          try {
+            const ragUrlC = new URL('/api/rag/query', new URL(request.url).origin)
+            const ragResC = await fetch(ragUrlC.toString(), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ question: `${cursoInfo} en Instituto Windsor: costos, horarios, duración, modalidad`, match_count: 15 }),
+              signal: AbortSignal.timeout(8000),
+            })
+            if (ragResC.ok) {
+              const rdC = await ragResC.json()
+              ragCorreo = typeof rdC?.context === 'string' ? rdC.context : rdC?.answer || ''
+            }
+          } catch { /* sin RAG */ }
+          const gptCorreo = await askGPT({
+            fase: 'info_enviada',
+            leadData: { nombre: leadSnapshot?.nombre, email: emailDetectado || leadSnapshot?.email, curso: cursoInfo },
+            userMessage: 'Dame información del programa',
+            ragContext: ragCorreo,
+            history: convHistory,
+          })
+          const ack2 = emailDetectado ? '¡Perfecto, ya tengo tu correo! 📧\n\n' : ''
+          const msgFallback = ack2 + gptCorreo.respuesta + buildCTA(cursoInfo)
+          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, msgFallback, 'accion')
+          return buildProviderResponse(provider, msgFallback, waNumber)
+        }
+
+        // Aún no dio correo — GPT pide el correo amablemente
+        const gptPideCorreo = await askGPT({
+          fase: 'correo',
+          leadData: { nombre: leadSnapshot?.nombre, email: leadSnapshot?.email, curso: leadSnapshot?.curso },
+          userMessage: originalText,
+          ragContext: '',
+          history: convHistory,
+        })
+        await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, gptPideCorreo.respuesta, 'correo')
+        return buildProviderResponse(provider, gptPideCorreo.respuesta, waNumber)
       }
 
       // ── Interceptor global: cambio de programa (igual que el lab) ────────────
@@ -1523,51 +1591,6 @@ export async function POST(request: Request) {
       const newStage = getStageForPhase(gpt.siguienteFase)
       if (newStage && leadId) {
         await supabase.from('leads').update({ stage: newStage }).eq('id', leadId)
-      }
-
-      // ── Auto-info: correo → info_enviada, enviar info en el mismo turno ───────
-      if (phase === 'correo' && gpt.siguienteFase === 'info_enviada') {
-        const cursoParaInfo = gpt.programa || leadSnapshot?.curso
-        const ackCorreo = gpt.respuesta  // "¡Perfecto, ya tengo tu correo!"
-
-        // Usar INFO_MSG hardcodeado si existe (más confiable que RAG+GPT)
-        const infoMsgAI = cursoParaInfo ? INFO_MSGS[cursoParaInfo] : null
-        if (infoMsgAI) {
-          const ctaAI = buildCTA(cursoParaInfo)
-          const msgFinal = ackCorreo ? `${ackCorreo}\n\n${infoMsgAI}${ctaAI}` : infoMsgAI + ctaAI
-          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, msgFinal, 'accion')
-          return buildProviderResponse(provider, msgFinal, waNumber)
-        }
-
-        // Fallback RAG+GPT para programas sin INFO_MSG
-        let ragAutoInfo = ''
-        try {
-          const ragUrlAI = new URL('/api/rag/query', new URL(request.url).origin)
-          const ragResAI = await fetch(ragUrlAI.toString(), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              question: `${cursoParaInfo} en Instituto Windsor: costos, horarios, duración, modalidad, certificaciones, campo laboral`,
-              match_count: 15,
-            }),
-            signal: AbortSignal.timeout(8000),
-          })
-          if (ragResAI.ok) {
-            const rdAI = await ragResAI.json()
-            ragAutoInfo = typeof rdAI?.context === 'string' ? rdAI.context : rdAI?.answer || ''
-          }
-        } catch { /* sin RAG */ }
-        const gptInfo = await askGPT({
-          fase: 'info_enviada',
-          leadData: { nombre: gpt.nombre || leadSnapshot?.nombre, email: gpt.email || leadSnapshot?.email, curso: cursoParaInfo },
-          userMessage: 'Dame información sobre el programa',
-          ragContext: ragAutoInfo,
-        })
-        const msgCombinadoFallback = ackCorreo
-          ? `${ackCorreo}\n\n${gptInfo.respuesta}${buildCTA(cursoParaInfo)}`
-          : gptInfo.respuesta + buildCTA(cursoParaInfo)
-        await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, msgCombinadoFallback, 'accion')
-        return buildProviderResponse(provider, msgCombinadoFallback, waNumber)
       }
 
       // Si GPT avanza a programa, interceptar
