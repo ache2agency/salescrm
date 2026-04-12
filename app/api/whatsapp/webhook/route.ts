@@ -1586,6 +1586,13 @@ export async function POST(request: Request) {
         if (gpt.nombre && leadId && !hasLeadName(leadSnapshot?.nombre, waNumber)) {
           await supabase.from('leads').update({ nombre: gpt.nombre, stage: 'contactado' }).eq('id', leadId)
         }
+        // Si venimos de saludo sin nombre válido, volver a pedir nombre (no mostrar catálogo con teléfono)
+        const nombreValido = hasLeadName(gpt.nombre || leadSnapshot?.nombre, waNumber)
+        if (phase === 'saludo' && !nombreValido) {
+          const askName = '¿Cómo te llamas? 😊 Así puedo ayudarte mejor.'
+          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, askName, 'saludo')
+          return buildProviderResponse(provider, askName, waNumber)
+        }
         // "inglés" ambiguo — preguntar cuál de las tres opciones
         const msgLower2 = originalText.toLowerCase()
         if (/ingl[eé]s/i.test(msgLower2) && !/ni[ñn]o|adulto|licenciatura|lic\b/i.test(msgLower2)) {
@@ -1600,10 +1607,10 @@ export async function POST(request: Request) {
           await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, correoMsg, 'correo')
           return buildProviderResponse(provider, correoMsg, waNumber)
         }
-        // Sin programa identificado — catálogo hardcodeado
-        const nombre = gpt.nombre || leadSnapshot?.nombre
-        const botMessage = nombre
-          ? `¡Hola ${nombre}! 😊 ¿Qué programa de Instituto Windsor te interesa?\n\n${CATALOGO_OFERTA}`
+        // Sin programa identificado — catálogo (solo nombre válido, nunca teléfono)
+        const nombreMostrar = nombreValido ? (gpt.nombre || leadSnapshot?.nombre) : null
+        const botMessage = nombreMostrar
+          ? `¡Hola ${nombreMostrar}! 😊 ¿Qué programa de Instituto Windsor te interesa?\n\n${CATALOGO_OFERTA}`
           : `¡Hola! 😊 ¿Qué programa de Instituto Windsor te interesa?\n\n${CATALOGO_OFERTA}`
         await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, botMessage, 'programa')
         return buildProviderResponse(provider, botMessage, waNumber)
