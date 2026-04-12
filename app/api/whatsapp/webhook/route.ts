@@ -1271,32 +1271,20 @@ export async function POST(request: Request) {
       if (phase === 'programa') {
         // A/B/C interceptor: respuestas a la disambiguación de inglés (respuesta de una letra)
         const msgTrimProg = originalText.trim()
-        if (/^\s*a\s*$/i.test(msgTrimProg)) {
+        const msgLProg = msgTrimProg.toLowerCase()
+        let programaIngles: string | null = null
+        if (/^\s*a\s*$/.test(msgLProg) || /\badultos?\b/i.test(msgTrimProg)) programaIngles = 'Inglés para adultos'
+        else if (/^\s*b\s*$/.test(msgLProg) || /\bni[ñn]os?\b/i.test(msgTrimProg)) programaIngles = 'Inglés para niños'
+        else if (/^\s*c\s*$/.test(msgLProg)) programaIngles = 'Licenciatura en Inglés'
+
+        if (programaIngles) {
           if (leadId) {
-            await supabase.from('leads').update({ curso: 'Inglés para adultos' }).eq('id', leadId)
-            leadSnapshot = { ...leadSnapshot, curso: 'Inglés para adultos' } as LeadSnapshot
+            await supabase.from('leads').update({ curso: programaIngles }).eq('id', leadId)
+            leadSnapshot = { ...leadSnapshot, curso: programaIngles } as LeadSnapshot
           }
-          const ackA = '¡Perfecto! 😊 Te cuento sobre el curso de Inglés para adultos. ¿Me compartes tu correo electrónico para darte seguimiento personalizado?'
-          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, ackA, 'correo')
-          return buildProviderResponse(provider, ackA, waNumber)
-        }
-        if (/^\s*b\s*$/i.test(msgTrimProg)) {
-          if (leadId) {
-            await supabase.from('leads').update({ curso: 'Inglés para niños' }).eq('id', leadId)
-            leadSnapshot = { ...leadSnapshot, curso: 'Inglés para niños' } as LeadSnapshot
-          }
-          const ackB = '¡Qué gran decisión! 😊 Te cuento sobre el curso de Inglés para niños. ¿Me compartes tu correo electrónico para darte seguimiento personalizado?'
-          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, ackB, 'correo')
-          return buildProviderResponse(provider, ackB, waNumber)
-        }
-        if (/^\s*c\s*$/i.test(msgTrimProg)) {
-          if (leadId) {
-            await supabase.from('leads').update({ curso: 'Licenciatura en Inglés' }).eq('id', leadId)
-            leadSnapshot = { ...leadSnapshot, curso: 'Licenciatura en Inglés' } as LeadSnapshot
-          }
-          const ackC = '¡Excelente elección! 😊 Te cuento sobre la Licenciatura en Inglés. ¿Me compartes tu correo electrónico para darte seguimiento personalizado?'
-          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, ackC, 'correo')
-          return buildProviderResponse(provider, ackC, waNumber)
+          const ackIngles = `¡Excelente elección! 😊 Para contarte todo sobre *${programaIngles}*, ¿me compartes tu correo electrónico para darte seguimiento personalizado? 📧`
+          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, ackIngles, 'correo')
+          return buildProviderResponse(provider, ackIngles, waNumber)
         }
 
         // Inglés ambiguo (igual que lab) — antes de detectarPrograma
