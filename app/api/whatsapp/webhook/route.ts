@@ -137,6 +137,7 @@ function getStageForPhase(phase: string | null | undefined) {
     case 'dudas':
     case 'accion':
     case 'seguimiento':
+    case 'convenios':
       return 'interesado'
     case 'cerrado':
       return 'cerrado'
@@ -601,8 +602,8 @@ function detectarPrograma(msg: string): string | null {
   if (/psicolog|psico\b/i.test(msg)) return 'Psicología'
   if (/turism.*(online|en l[ií]nea)|(online|en l[ií]nea).*turism/i.test(msg)) return 'Administración turística online'
   if (/turism/i.test(msg)) return 'Administración turística'
-  if (/(relaciones p[uú]blicas|mercadotecnia).*(online|en l[ií]nea)/i.test(msg)) return 'Relaciones públicas y mercadotecnia online'
-  if (/relaciones p[uú]blicas|mercadotecnia/i.test(msg)) return 'Relaciones públicas y mercadotecnia'
+  if (/(relaciones p[uú]blicas|mercadotecnia|\bmkt\b|marketing).*(online|en l[ií]nea)/i.test(msg)) return 'Relaciones públicas y mercadotecnia online'
+  if (/relaciones p[uú]blicas|mercadotecnia|\bmkt\b|marketing/i.test(msg)) return 'Relaciones públicas y mercadotecnia'
   if (/franc[eé]s/i.test(msg)) return 'Francés'
   if (/italian/i.test(msg)) return 'Italiano'
   if (/innovaci[oó]n empresarial/i.test(msg)) return 'Maestría en Innovación empresarial'
@@ -623,6 +624,196 @@ function noQuiereEmail(msg: string): boolean {
   if (/no ten|sin correo|no.*correo|no.*email|no.*mail|no quiero|no doy|no hay|no pos|nop/i.test(m)) return true
   if (!m.includes('@') && /^(info|siguiente|dale|ok|omite|salta|después|despues|luego|no|nada|sin|omitir|skip)$/i.test(m.trim())) return true
   return false
+}
+
+// ─── CONVENIOS ───────────────────────────────────────────────────────────────
+
+const CONVENIOS_LISTA_MSG = `Sí, contamos con convenios vigentes con las siguientes instituciones:
+
+1. Subsecretaría de Educación Básica y PRONI
+2. SUSPEG Central
+3. Sección VII
+4. Sección 36 de Salud
+5. Tribunal Electoral del Estado de Guerrero
+6. Colegios de Bachilleres del Estado de Guerrero
+7. Secretaría de Migrantes y Asuntos Internacionales
+8. Secretaría de Gestión Integral y Protección Civil
+9. SITMABEG
+10. Sindicato del Metro CD. México
+11. Egresados Windsor
+12. Instituto Tecnológico de Chilpancingo
+13. Secundaria Técnica No. 81
+
+¿A cuál de estas instituciones perteneces? 😊`
+
+const CONVENIOS_DETALLE: Record<string, string> = {
+  proni: `*Convenio: Subsecretaría de Educación Básica y PRONI*
+Beneficiarios: Trabajador, hijos y cónyuges
+
+📌 *Inscripción:* 50% nuevo ingreso | 30% reingreso
+📚 *Licenciatura:* 25% descuento
+📚 *Cursos libres:* 30% descuento
+🎓 *Preparatoria:* 20% descuento
+🎓 *Maestría:* 30% descuento
+☀️ *Verano 2026:* 20% descuento`,
+
+  suspeg: `*Convenio: SUSPEG Central*
+Beneficiarios: Trabajador, hijos y cónyuges | Vigencia: 15-Dic-2025
+
+📌 *Inscripción:* 50% nuevo ingreso | 30% reingreso
+📚 *Licenciatura:* 25% descuento
+📚 *Cursos libres:* 40% descuento
+🎓 *Preparatoria:* 20% descuento
+🎓 *Maestría:* 30% descuento
+☀️ *Verano 2026:* 20% descuento`,
+
+  seccion7: `*Convenio: Sección VII*
+Beneficiarios: Trabajador, hijos y cónyuges | Vigencia: Marzo 2027
+
+📌 *Inscripción:* 50% nuevo ingreso | 30% reingreso
+📚 *Licenciatura:* 25% descuento
+📚 *Cursos libres:* 40% descuento
+🎓 *Preparatoria:* 20% descuento
+🎓 *Maestría:* 30% descuento
+☀️ *Verano 2026:* 20% descuento`,
+
+  seccion36: `*Convenio: Sección 36 de Salud*
+Beneficiarios: Trabajador, hijos y cónyuges | Vigencia: Noviembre 2025
+
+📌 *Inscripción:* 30% nuevo ingreso | 30% reingreso
+📚 *Licenciatura:* 25% descuento
+📚 *Cursos libres:* 30% descuento
+🎓 *Preparatoria:* 20% descuento
+🎓 *Maestría:* 25% descuento
+☀️ *Verano 2026:* 20% descuento`,
+
+  tribunal: `*Convenio: Tribunal Electoral del Estado de Guerrero*
+Beneficiarios: Trabajador, hijos y cónyuges | Vigencia: Marzo 2026
+
+📌 *Inscripción:* 50% nuevo ingreso | 30% reingreso
+📚 *Licenciatura:* 20% descuento
+📚 *Cursos libres:* 30% descuento
+🎓 *Preparatoria:* 20% descuento
+🎓 *Maestría:* 20% descuento
+☀️ *Verano 2026:* 20% descuento`,
+
+  cobach: `*Convenio: Colegios de Bachilleres del Estado de Guerrero*
+Beneficiarios: Trabajadores, hijos y estudiantes de planteles | Vigencia: Marzo 2027
+
+📌 *Inscripción:* 50% nuevo ingreso | 30% reingreso
+📚 *Licenciatura:* 20% descuento
+📚 *Cursos libres:* 30% descuento
+🎓 *Preparatoria:* 20% descuento
+🎓 *Maestría:* 30% descuento
+☀️ *Verano 2026:* 20% descuento`,
+
+  migrantes: `*Convenio: Secretaría de Migrantes y Asuntos Internacionales*
+Beneficiarios: Trabajadores, hijos y estudiantes de planteles | Vigencia: Mayo 2026
+
+📌 *Inscripción:* 40% nuevo ingreso | 30% reingreso
+📚 *Licenciatura:* 20% descuento
+📚 *Cursos libres:* 30% descuento
+🎓 *Preparatoria:* 20% descuento
+🎓 *Maestría:* 30% descuento
+☀️ *Verano 2026:* 20% descuento`,
+
+  proteccioncivil: `*Convenio: Secretaría de Gestión Integral y Protección Civil*
+Beneficiarios: Trabajadores, hijos y estudiantes de planteles | Vigencia: Sep-2027
+
+📌 *Inscripción:* 50% nuevo ingreso | 30% reingreso
+📚 *Licenciatura:* 20% descuento
+📚 *Cursos libres:* 30% descuento
+🎓 *Preparatoria:* 20% descuento
+🎓 *Maestría:* 20% descuento
+☀️ *Verano 2026:* 20% descuento`,
+
+  sitmabeg: `*Convenio: SITMABEG*
+Beneficiarios: Trabajadores, hijos y estudiantes de planteles | Vigencia: Mayo 2027
+
+📌 *Inscripción:* 50% nuevo ingreso | 30% reingreso
+📚 *Licenciatura:* 20% descuento
+📚 *Cursos libres:* 30% descuento
+🎓 *Preparatoria:* 20% descuento
+🎓 *Maestría:* 20% descuento
+☀️ *Verano 2026:* 20% descuento`,
+
+  metro: `*Convenio: Sindicato del Metro CD. México*
+Beneficiarios: Trabajadores e hijos | Vigencia: Ene-2027
+
+📌 *Inscripción:* 50% nuevo ingreso | 30% reingreso
+📚 *Licenciatura:* 20% descuento
+📚 *Cursos libres:* 20% descuento
+🎓 *Preparatoria:* 20% descuento
+🎓 *Maestría:* 20% descuento
+☀️ *Verano 2026:* 20% descuento`,
+
+  egresados: `*Convenio: Egresados Instituto Windsor*
+Beneficiarios: Egresados de Licenciaturas | Vigencia: Permanente
+
+📌 *Inscripción:* Condonación nuevo ingreso | 50% reingreso
+📚 *Licenciatura:* No aplica
+📚 *Cursos libres:* 50% descuento
+🎓 *Preparatoria:* No aplica
+🎓 *Maestría:* 25% descuento
+☀️ *Verano 2026:* 20% descuento`,
+
+  itech: `*Convenio: Instituto Tecnológico de Chilpancingo*
+Beneficiarios: Alumnos ITECH
+
+📌 *Inscripción:* 50% nuevo ingreso | 30% reingreso
+📚 *Licenciatura:* 20% descuento
+📚 *Cursos libres:* 30% descuento
+🎓 *Preparatoria:* No aplica
+🎓 *Maestría:* 20% descuento
+☀️ *Verano 2026:* No aplica`,
+
+  sec81: `*Convenio: Secundaria Técnica No. 81*
+Beneficiarios: Alumnos
+
+📌 *Inscripción:* 50% nuevo ingreso
+📚 *Licenciatura:* No aplica
+📚 *Cursos libres:* 30% descuento
+🎓 *Preparatoria:* No aplica
+🎓 *Maestría:* No aplica
+☀️ *Verano 2026:* No aplica`,
+}
+
+/** Detecta si el mensaje pregunta sobre convenios */
+function detectarPreguntaConvenio(msg: string): boolean {
+  return /convenio|descuento.*trabajo|trabajo.*descuento|precio.*especial|especial.*precio|sindicato|trabajo en|trabajo.*gobierno|gobierno.*trabajo|empleado.*estado|estado.*empleado|precio.*instituci|instituci.*precio|soy.*maestro|maestro.*descuento|descuento.*maestro|beneficio.*trabajo|trabajo.*beneficio/i.test(msg)
+}
+
+/** Detecta qué institución menciona el usuario y retorna la clave de CONVENIOS_DETALLE */
+function detectarInstitucionConvenio(msg: string): string | null {
+  const m = msg.toLowerCase()
+  if (/proni|educaci[oó]n b[aá]sica|subsecretar/i.test(m)) return 'proni'
+  if (/suspeg/i.test(m)) return 'suspeg'
+  if (/secci[oó]n.*vii|secci[oó]n.*7\b|secci[oó]n 7[^2-9]|maestros.*secci[oó]n|secci[oó]n.*maestros/i.test(m)) return 'seccion7'
+  if (/secci[oó]n.*36|36.*salud|salud.*36/i.test(m)) return 'seccion36'
+  if (/tribunal electoral/i.test(m)) return 'tribunal'
+  if (/cobach|colegio.*bachiller|bachiller.*colegio/i.test(m)) return 'cobach'
+  if (/migrante|asuntos internacionales/i.test(m)) return 'migrantes'
+  if (/protecci[oó]n civil|gesti[oó]n integral/i.test(m)) return 'proteccioncivil'
+  if (/sitmabeg/i.test(m)) return 'sitmabeg'
+  if (/metro.*cdmx|metro.*ciudad|sindicato.*metro|metro cd/i.test(m)) return 'metro'
+  if (/egresado|ya termin[eé]|ya estudi[eé]|gradu/i.test(m)) return 'egresados'
+  if (/tecnol[oó]gico.*chilpancingo|itech|tec.*chilpancingo/i.test(m)) return 'itech'
+  if (/secundaria.*t[eé]cnica.*81|sec.*t[eé]cnica.*81|81/i.test(m)) return 'sec81'
+  // números del 1-13 que corresponden a la lista
+  if (/^\s*1\s*$/.test(m.trim())) return 'proni'
+  if (/^\s*2\s*$/.test(m.trim())) return 'suspeg'
+  if (/^\s*3\s*$/.test(m.trim())) return 'seccion7'
+  if (/^\s*4\s*$/.test(m.trim())) return 'seccion36'
+  if (/^\s*5\s*$/.test(m.trim())) return 'tribunal'
+  if (/^\s*6\s*$/.test(m.trim())) return 'cobach'
+  if (/^\s*7\s*$/.test(m.trim())) return 'migrantes'
+  if (/^\s*8\s*$/.test(m.trim())) return 'proteccioncivil'
+  if (/^\s*9\s*$/.test(m.trim())) return 'sitmabeg'
+  if (/^\s*10\s*$/.test(m.trim())) return 'metro'
+  if (/^\s*11\s*$/.test(m.trim())) return 'egresados'
+  if (/^\s*12\s*$/.test(m.trim())) return 'itech'
+  if (/^\s*13\s*$/.test(m.trim())) return 'sec81'
+  return null
 }
 
 // ─── GPT-4o como cerebro del bot ─────────────────────────────────────────────
@@ -822,6 +1013,11 @@ B) Quiero inscribirme
 (Si el programa es inglés adultos, inglés niños o cualquier curso de idiomas, cambia B por: "B) Quiero agendar mi clase de prueba gratuita" y pon siguienteFase: accion)`,
 
     dudas: `Responde la duda con datos concretos de la BASE (costos, horarios, requisitos, etc.). Si la duda es sobre costos o precio, incluye siempre la promoción vigente con el porcentaje de descuento y el precio final (ej. "Inscripción: ~$2,300~ → $690 (70% de descuento)").
+Si la pregunta es ambigua o indirecta, interpreta la intención del prospecto y busca en la BASE el tema más relacionado. Ejemplos:
+- Si menciona que trabaja en alguna institución o pregunta por precio especial → busca convenios
+- Si pregunta si el título "vale" o "sirve" → responde sobre RVOE y reconocimiento oficial
+- Si pregunta qué necesita traer o si hay libros → responde sobre material
+- Si pregunta cuánto tiempo o cuándo termina → responde sobre duración
 Al terminar, vuelve a presentar:
 A) Tengo más dudas
 B) Quiero inscribirme [o "B) Quiero mi clase de prueba" si es inglés]
@@ -846,6 +1042,11 @@ Captura el teléfono en el campo "telefono" del JSON.`,
     seguimiento: `Responde cualquier pregunta del prospecto usando la BASE DE CONOCIMIENTO.
 Si menciona un programa diferente al que tenía, da información sobre ese nuevo programa con entusiasmo.
 Si pregunta sobre costos, horarios, requisitos, modalidad — responde con detalle usando la BASE.
+Si la pregunta es ambigua o indirecta, interpreta la intención y busca en la BASE el tema más relacionado. Ejemplos:
+- Si menciona que trabaja en alguna institución o pide precio especial → busca convenios vigentes
+- Si pregunta si el título "vale" o "sirve" → responde sobre RVOE y reconocimiento oficial
+- Si pregunta qué necesita traer o si hay libros → responde sobre material
+- Si pregunta cuánto tiempo o cuándo termina → responde sobre duración
 Si quiere inscribirse → siguienteFase: inscripcion. Si quiere clase de prueba (solo inglés) → siguienteFase: clase_prueba.
 Si no hay una pregunta clara, recuérdale amablemente el siguiente paso según su programa.`,
     cerrado: 'La conversación está cerrada. Pregunta amablemente si puedes ayudarle en algo más. Si el prospecto pide hablar con alguien, quiere más información o retoma el interés, pon requestedHuman: true y siguienteFase: asesor.',
@@ -1257,6 +1458,27 @@ export async function POST(request: Request) {
         }
       }
 
+      // ── Interceptor global de convenios ─────────────────────────────────────
+      // Fase convenios: el prospecto ya vio la lista y menciona su institución
+      if (phase === 'convenios') {
+        const instKey = detectarInstitucionConvenio(originalText)
+        if (instKey && CONVENIOS_DETALLE[instKey]) {
+          const detalleMsg = `${CONVENIOS_DETALLE[instKey]}\n\n¿Te gustaría inscribirte o tienes alguna duda? 😊`
+          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, detalleMsg, 'dudas')
+          return buildProviderResponse(provider, detalleMsg, waNumber)
+        }
+        // No identificó institución — pedir que elija de la lista
+        const reask = `No encontré esa institución en nuestra lista. ¿Puedes indicarme el número o nombre de tu institución?\n\n${CONVENIOS_LISTA_MSG}`
+        await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, reask, 'convenios')
+        return buildProviderResponse(provider, reask, waNumber)
+      }
+
+      // En cualquier fase: si pregunta por convenios → mostrar lista
+      if (detectarPreguntaConvenio(originalText)) {
+        await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, CONVENIOS_LISTA_MSG, 'convenios')
+        return buildProviderResponse(provider, CONVENIOS_LISTA_MSG, waNumber)
+      }
+
       // Detección global de "inglés" ambiguo — sin importar la fase, si no hay programa capturado aún
       if (!hasLeadProgram(leadSnapshot?.curso)) {
         const msgLower0 = originalText.toLowerCase()
@@ -1329,11 +1551,18 @@ export async function POST(request: Request) {
         if (eligeA(originalText)) {
           // Deja que GPT maneje la duda con RAG — sigue al bloque principal
         } else {
-          // Respuesta inesperada: repetir CTA
-          const ctaRepeat = buildCTA(leadSnapshot?.curso)
-          const msg = `${leadSnapshot?.nombre ? leadSnapshot.nombre + ', ' : ''}¿cuál de estas opciones te interesa?${ctaRepeat}`
-          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, msg, 'accion')
-          return buildProviderResponse(provider, msg, waNumber)
+          // Si parece pregunta o mensaje largo → GPT con RAG (no repetir CTA ciegamente)
+          const esRespuestaCorta = /^\s*[aAbBsSnNyY][iIoO]?\s*$/.test(originalText.trim())
+          const parecePregunta = originalText.trim().endsWith('?') || originalText.trim().length > 12
+          if (!esRespuestaCorta && parecePregunta) {
+            // Sigue al bloque principal de GPT+RAG
+          } else {
+            // Respuesta corta sin sentido: repetir CTA
+            const ctaRepeat = buildCTA(leadSnapshot?.curso)
+            const msg = `${leadSnapshot?.nombre ? leadSnapshot.nombre + ', ' : ''}¿cuál de estas opciones te interesa?${ctaRepeat}`
+            await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, msg, 'accion')
+            return buildProviderResponse(provider, msg, waNumber)
+          }
         }
       }
 
@@ -1439,23 +1668,8 @@ export async function POST(request: Request) {
       if (['info_enviada', 'dudas', 'accion', 'seguimiento', 'inscripcion', 'clase_prueba'].includes(phase)) {
         const esRespuestaCTA = /^\s*[aAbBsSnN][iIoO]?\s*$/.test(originalText)
         if (!esRespuestaCTA) {
-          const detectProgramaCambio = (msg: string): string | null => {
-            const m = msg.toLowerCase()
-            if (/ingl[eé]s.*ni[ñn]o|ni[ñn]o.*ingl[eé]s/i.test(msg)) return 'Inglés para niños'
-            if (/ingl[eé]s.*adulto|adulto.*ingl[eé]s/i.test(msg)) return 'Inglés para adultos'
-            if (/licenciatura.*ingl[eé]s|ingl[eé]s.*licenciatura|\blic\b.*ingl[eé]s/i.test(msg)) return 'Licenciatura en Inglés'
-            if (/franc[eé]s/i.test(m)) return 'Francés'
-            if (/italian[oa]/i.test(m)) return 'Italiano'
-            if (/psicolog|psico\b/i.test(m)) return 'Psicología'  // psico + psicología
-            if (/administraci[oó]n tur[ií]stica|turism/i.test(m)) return 'Administración turística'
-            if (/relaciones p[uú]blicas/i.test(m)) return 'Relaciones públicas y mercadotecnia'
-            if (/innovaci[oó]n empresarial/i.test(m)) return 'Maestría en Innovación empresarial'
-            if (/multiculturalidad|pluriling/i.test(m)) return 'Maestría en Multiculturalidad y plurilingüismo'
-            if (/bachillerato/i.test(m)) return 'Bachillerato'
-            if (/diplomado/i.test(m)) return 'Diplomados'
-            return null
-          }
-          const programaNuevoPC = detectProgramaCambio(originalText)
+          // Usa detectarPrograma() como única fuente de verdad (sin duplicar lógica)
+          const programaNuevoPC = detectarPrograma(originalText)
           const programaActualPC = (leadSnapshot?.curso || '').toLowerCase().trim()
           if (
             programaNuevoPC &&
