@@ -257,21 +257,72 @@ async function notifyAsesor(
   }
 }
 
-/** Admin / asesor por defecto para leads nuevos desde WhatsApp (env o primer perfil con rol admin). */
+/** Asignación por horario de turno — hora de México (America/Mexico_City) */
 async function getDefaultAssigneeId(
   supabase: Awaited<ReturnType<typeof createServiceRoleClient>>
 ): Promise<string | null> {
-  const fromEnv =
-    process.env.DEFAULT_LEAD_ASIGNADO_A?.trim() ||
-    process.env.WHATSAPP_DEFAULT_ADMIN_USER_ID?.trim()
-  if (fromEnv) return fromEnv
-  const { data } = await supabase
-    .from('profiles')
-    .select('id')
-    .eq('rol', 'admin')
-    .limit(1)
-    .maybeSingle()
-  return (data?.id as string | undefined) ?? null
+  try {
+    // Hora actual en México
+    const mexicoTime = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Mexico_City' }))
+    const day  = mexicoTime.getDay()   // 0=Dom, 1=Lun, 2=Mar, 3=Mié, 4=Jue, 5=Vie, 6=Sáb
+    const hour = mexicoTime.getHours()
+
+    const isMatutino  = hour >= 8  && hour < 15
+    const isVespertino = hour >= 16 && hour < 22
+
+    // Buscar asesores por nombre (parcial, sin distinguir mayúsculas)
+    const { data: perfiles } = await supabase
+      .from('profiles')
+      .select('id, nombre')
+
+    const get = (nombre: string) =>
+      perfiles?.find(p => p.nombre?.toLowerCase().includes(nombre.toLowerCase()))?.id ?? null
+
+    const aide  = get('aide')
+    const edgar = get('edgar')
+    const irene = get('irene')
+
+    // ── Horario de turno ────────────────────────────────────────────────────
+    // Lun(1), Mié(3), Vie(5): Mat=Aide  | Vesp=Irene
+    // Mar(2), Jue(4):          Mat=Edgar | Vesp=Edgar
+    // Sáb(6), Dom(0), fuera de horario: Round-robin
+    let assigneeId: string | null = null
+
+    if (isMatutino) {
+      if ([1, 3, 5].includes(day)) assigneeId = aide
+      else if ([2, 4].includes(day)) assigneeId = edgar
+    } else if (isVespertino) {
+      if ([1, 3, 5].includes(day)) assigneeId = irene
+      else if ([2, 4].includes(day)) assigneeId = edgar
+    }
+
+    // Round-robin para Sáb, Dom y fuera de horario
+    if (!assigneeId) {
+      const todos = [aide, edgar, irene].filter(Boolean) as string[]
+      if (todos.length === 0) return null
+
+      const { data: ultimoLead } = await supabase
+        .from('leads')
+        .select('asignado_a')
+        .in('asignado_a', todos)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      const ultimoIdx = ultimoLead?.asignado_a
+        ? todos.indexOf(ultimoLead.asignado_a as string)
+        : -1
+
+      assigneeId = todos[(ultimoIdx + 1) % todos.length]
+    }
+
+    return assigneeId
+  } catch (e) {
+    console.error('[getDefaultAssigneeId] error:', e)
+    // Fallback: primer admin
+    const { data } = await supabase.from('profiles').select('id').eq('rol', 'admin').limit(1).maybeSingle()
+    return (data?.id as string | undefined) ?? null
+  }
 }
 
 async function parseIncomingWhatsAppMessage(

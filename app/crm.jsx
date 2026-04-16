@@ -11,16 +11,16 @@ import NewLeadModal from "@/components/crm/NewLeadModal";
 const supabase = createClient();
 
 const STAGES = [
-  { id: "primer_contacto", label: "📞 Primer contacto", color: "#4A90D9", bg: "#1a2a3a" },
-  { id: "examen_ubicacion", label: "📝 Examen de ubicación", color: "#E8A838", bg: "#2a1f0a" },
-  { id: "clase_muestra", label: "🎓 Clase muestra", color: "#E85D38", bg: "#2a1210" },
-  { id: "segundo_contacto", label: "🔁 Segundo contacto", color: "#9B59B6", bg: "#1e1228" },
-  { id: "promocion_enviada", label: "🏷️ Promoción enviada", color: "#C76D2B", bg: "#2b1a0f" },
-  { id: "tercer_contacto", label: "📲 Tercer contacto", color: "#6D8CFF", bg: "#151d35" },
-  { id: "inscripcion_pendiente", label: "📋 Inscripción pendiente", color: "#F4D35E", bg: "#2b2612" },
-  { id: "inscrito", label: "✅ Inscrito", color: "#27AE60", bg: "#0d2018" },
-  { id: "perdido", label: "❌ Perdido", color: "#555", bg: "#1a1a1a" },
-  { id: "archivado", label: "📦 Archivado", color: "#888", bg: "#141414" },
+  { id: "primer_contacto", label: "📞 Primer contacto", color: "#2C4A8C", bg: "#eef2fb" },
+  { id: "examen_ubicacion", label: "📝 Examen de ubicación", color: "#b45309", bg: "#fef3c7" },
+  { id: "clase_muestra", label: "🎓 Clase muestra", color: "#A8263C", bg: "#fee2e8" },
+  { id: "segundo_contacto", label: "🔁 Segundo contacto", color: "#7c3aed", bg: "#ede9fe" },
+  { id: "promocion_enviada", label: "🏷️ Promoción enviada", color: "#c2410c", bg: "#ffedd5" },
+  { id: "tercer_contacto", label: "📲 Tercer contacto", color: "#2C4A8C", bg: "#dbeafe" },
+  { id: "inscripcion_pendiente", label: "📋 Inscripción pendiente", color: "#92400e", bg: "#fef9c3" },
+  { id: "inscrito", label: "✅ Inscrito", color: "#15803d", bg: "#dcfce7" },
+  { id: "perdido", label: "❌ Perdido", color: "#64748b", bg: "#f1f5f9" },
+  { id: "archivado", label: "📦 Archivado", color: "#94a3b8", bg: "#f8fafc" },
 ];
 
 const LEGACY_STAGE_MAP = {
@@ -947,27 +947,27 @@ export default function CRM() {
   const getConversationBadgeStyle = (type, value) => {
     if (type === "mode") {
       return value
-        ? { background: "#E8A83822", color: "#E8A838", border: "1px solid #E8A83844" }
-        : { background: "#1f2c1f", color: "#7ddc8b", border: "1px solid #2d5a35" };
+        ? { background: "#fef3c7", color: "#92400e", border: "1px solid #fcd34d" }
+        : { background: "#dcfce7", color: "#15803d", border: "1px solid #86efac" };
     }
 
     if (type === "phase") {
       const palette = {
-        saludo: ["#1f2836", "#7db4ff", "#2f4d75"],
-        programa: ["#2f2412", "#E8A838", "#654b16"],
-        correo: ["#1d2530", "#8ac0ff", "#2f4d75"],
-        info_enviada: ["#1a3024", "#5fd18c", "#25553b"],
-        dudas: ["#2e1f35", "#c58cff", "#5f3370"],
-        accion: ["#302318", "#ffb15c", "#6e4520"],
-        seguimiento: ["#2a2620", "#f4d35e", "#6b5b1c"],
-        cerrado: ["#16281f", "#72d99a", "#24593d"],
-        perdido: ["#2c1d1d", "#ff8b8b", "#6d3434"],
+        saludo: ["#dbeafe", "#1e40af", "#93c5fd"],
+        programa: ["#fef3c7", "#92400e", "#fcd34d"],
+        correo: ["#e0f2fe", "#0369a1", "#7dd3fc"],
+        info_enviada: ["#dcfce7", "#15803d", "#86efac"],
+        dudas: ["#ede9fe", "#6d28d9", "#c4b5fd"],
+        accion: ["#ffedd5", "#c2410c", "#fdba74"],
+        seguimiento: ["#fef9c3", "#854d0e", "#fde047"],
+        cerrado: ["#d1fae5", "#065f46", "#6ee7b7"],
+        perdido: ["#fee2e2", "#991b1b", "#fca5a5"],
       };
-      const [bg, color, border] = palette[value] || ["#1a1a1a", "#aaa", "#333"];
+      const [bg, color, border] = palette[value] || ["#f1f5f9", "#64748b", "#cbd5e1"];
       return { background: bg, color, border: `1px solid ${border}` };
     }
 
-    return { background: "#1a1a1a", color: "#aaa", border: "1px solid #333" };
+    return { background: "#f1f5f9", color: "#64748b", border: "1px solid #cbd5e1" };
   };
 
   const getLeadNextStep = (lead) => {
@@ -997,12 +997,12 @@ export default function CRM() {
 
   const getCitaStatusStyle = (status) => {
     const map = {
-      pendiente: { background: "#2a2620", color: "#f4d35e", border: "1px solid #6b5b1c" },
-      confirmada: { background: "#1a3024", color: "#72d99a", border: "1px solid #24593d" },
-      completada: { background: "#1f2836", color: "#8ac0ff", border: "1px solid #2f4d75" },
-      cancelada: { background: "#2c1d1d", color: "#ff8b8b", border: "1px solid #6d3434" },
+      pendiente: { background: "#fef9c3", color: "#854d0e", border: "1px solid #fde047" },
+      confirmada: { background: "#dcfce7", color: "#15803d", border: "1px solid #86efac" },
+      completada: { background: "#dbeafe", color: "#1e40af", border: "1px solid #93c5fd" },
+      cancelada: { background: "#fee2e2", color: "#991b1b", border: "1px solid #fca5a5" },
     };
-    return map[status] || { background: "#1a1a1a", color: "#aaa", border: "1px solid #333" };
+    return map[status] || { background: "#f1f5f9", color: "#64748b", border: "1px solid #cbd5e1" };
   };
 
   const getConversationPhaseForStage = (stage) => {
@@ -1375,43 +1375,43 @@ export default function CRM() {
   };
 
   return (
-    <div style={{ fontFamily: "'DM Mono', 'Courier New', monospace", background: "#0e0e0e", minHeight: "100vh", color: "#e0e0e0" }}>
+    <div style={{ fontFamily: "'DM Mono', 'Courier New', monospace", background: "#f5f7fa", minHeight: "100vh", color: "#1a1a1a" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Bebas+Neue&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
         ::-webkit-scrollbar { width: 4px; height: 4px; }
-        ::-webkit-scrollbar-track { background: #1a1a1a; }
-        ::-webkit-scrollbar-thumb { background: #E8A838; border-radius: 2px; }
-        .card { background: #161616; border: 1px solid #2a2a2a; border-radius: 8px; transition: all 0.2s; cursor: grab; }
-        .card:hover { border-color: #E8A838; transform: translateY(-2px); box-shadow: 0 4px 20px rgba(232,168,56,0.15); }
+        ::-webkit-scrollbar-track { background: #e2e8f0; }
+        ::-webkit-scrollbar-thumb { background: #2C4A8C; border-radius: 2px; }
+        .card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; transition: all 0.2s; cursor: grab; }
+        .card:hover { border-color: #A8263C; transform: translateY(-2px); box-shadow: 0 4px 20px rgba(200,16,46,0.12); }
         .card:active { cursor: grabbing; }
         .btn { border: none; border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 500; transition: all 0.15s; }
-        .btn-primary { background: #E8A838; color: #0e0e0e; padding: 8px 16px; }
-        .btn-primary:hover { background: #f5b840; }
-        .btn-ghost { background: transparent; color: #888; padding: 6px 12px; border: 1px solid #333; }
-        .btn-ghost:hover { border-color: #E8A838; color: #E8A838; }
+        .btn-primary { background: #A8263C; color: #ffffff; padding: 8px 16px; }
+        .btn-primary:hover { background: #8a1e30; }
+        .btn-ghost { background: transparent; color: #64748b; padding: 6px 12px; border: 1px solid #cbd5e1; }
+        .btn-ghost:hover { border-color: #2C4A8C; color: #2C4A8C; }
         .btn-wa { background: #25D366; color: white; padding: 5px 10px; }
         .btn-wa:hover { background: #20b858; }
-        .input { background: #1e1e1e; border: 1px solid #333; border-radius: 6px; color: #e0e0e0; font-family: inherit; font-size: 13px; padding: 8px 12px; width: 100%; outline: none; transition: border 0.2s; }
-        .input:focus { border-color: #E8A838; }
-        .select { appearance: none; background: #1e1e1e; border: 1px solid #333; border-radius: 6px; color: #e0e0e0; font-family: inherit; font-size: 13px; padding: 8px 12px; width: 100%; outline: none; cursor: pointer; }
-        .select:focus { border-color: #E8A838; }
+        .input { background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; color: #1a1a1a; font-family: inherit; font-size: 13px; padding: 8px 12px; width: 100%; outline: none; transition: border 0.2s; }
+        .input:focus { border-color: #2C4A8C; }
+        .select { appearance: none; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; color: #1a1a1a; font-family: inherit; font-size: 13px; padding: 8px 12px; width: 100%; outline: none; cursor: pointer; }
+        .select:focus { border-color: #2C4A8C; }
         .tag { display: inline-block; border-radius: 4px; font-size: 10px; font-weight: 500; padding: 2px 7px; letter-spacing: 0.5px; }
-        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; }
-        .modal { background: #161616; border: 1px solid #333; border-radius: 12px; max-width: 520px; width: 100%; max-height: 90vh; overflow-y: auto; }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .modal { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; max-width: 520px; width: 100%; max-height: 90vh; overflow-y: auto; }
         .toast { position: fixed; bottom: 24px; right: 24px; z-index: 999; padding: 12px 20px; border-radius: 8px; font-size: 13px; animation: slideUp 0.3s ease; }
         @keyframes slideUp { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform: translateY(0); } }
         .col-drop { min-height: 80px; border-radius: 6px; transition: background 0.2s; }
-        .col-drop.drag-over { background: rgba(232,168,56,0.05); border: 1px dashed #E8A838; }
-        .stat-card { background: #161616; border: 1px solid #2a2a2a; border-radius: 10px; padding: 20px; }
+        .col-drop.drag-over { background: rgba(200,16,46,0.05); border: 1px dashed #A8263C; }
+        .stat-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; }
         .nav-btn { background: transparent; border: none; cursor: pointer; font-family: inherit; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; padding: 8px 16px; border-radius: 6px; transition: all 0.15s; }
-        .nav-btn.active { background: #E8A838; color: #0e0e0e; font-weight: 500; }
-        .nav-btn:not(.active) { color: #666; }
-        .nav-btn:not(.active):hover { color: #E8A838; }
+        .nav-btn.active { background: #A8263C; color: #ffffff; font-weight: 500; }
+        .nav-btn:not(.active) { color: rgba(255,255,255,0.7); }
+        .nav-btn:not(.active):hover { color: #ffffff; background: rgba(255,255,255,0.1); }
         textarea { resize: vertical; min-height: 60px; }
-        .loading { display: flex; align-items: center; justify-content: center; height: 200px; font-size: 14px; color: #555; }
-        .admin-badge { background: #E8A83822; color: #E8A838; border: 1px solid #E8A83844; border-radius: 4px; font-size: 10px; padding: 2px 8px; letter-spacing: 1px; }
-        .hamburger-btn { background: transparent; border: none; cursor: pointer; padding: 8px; color: #E8A838; }
+        .loading { display: flex; align-items: center; justify-content: center; height: 200px; font-size: 14px; color: #64748b; }
+        .admin-badge { background: rgba(200,16,46,0.12); color: #A8263C; border: 1px solid rgba(200,16,46,0.3); border-radius: 4px; font-size: 10px; padding: 2px 8px; letter-spacing: 1px; }
+        .hamburger-btn { background: transparent; border: none; cursor: pointer; padding: 8px; color: #ffffff; }
         .mobile-only { display: none; }
         .crm-tagline { display: inline; }
         @media (max-width: 768px) {
@@ -1421,8 +1421,8 @@ export default function CRM() {
           .crm-tagline { display: none !important; }
           .crm-admin-badge { display: none !important; }
           .crm-title { font-size: 22px !important; }
-          .mobile-menu { display: flex; flex-direction: column; position: absolute; top: 100%; left: 0; right: 0; background: #161616; border-bottom: 2px solid #E8A83844; box-shadow: 0 8px 24px rgba(0,0,0,0.6); z-index: 400; padding: 8px 0; }
-          .mobile-menu .nav-btn { text-align: left; padding: 12px 20px; border-radius: 0; font-size: 13px; border-bottom: 1px solid #1a1a1a; }
+          .mobile-menu { display: flex; flex-direction: column; position: absolute; top: 100%; left: 0; right: 0; background: #2C4A8C; border-bottom: 2px solid rgba(200,16,46,0.4); box-shadow: 0 8px 24px rgba(0,0,0,0.2); z-index: 400; padding: 8px 0; }
+          .mobile-menu .nav-btn { text-align: left; padding: 12px 20px; border-radius: 0; font-size: 13px; border-bottom: 1px solid rgba(255,255,255,0.1); }
           .mobile-menu .nav-btn:last-child { border-bottom: none; }
           .stat-card-grid { grid-template-columns: repeat(2, 1fr) !important; }
           .modal { max-width: 100% !important; margin: 0 !important; border-radius: 12px 12px 0 0 !important; position: fixed !important; bottom: 0 !important; left: 0 !important; right: 0 !important; max-height: 92vh !important; }
@@ -1436,11 +1436,11 @@ export default function CRM() {
       `}</style>
 
       {/* HEADER */}
-      <div style={{ borderBottom: "1px solid #1e1e1e", padding: "0 24px", position: "sticky", top: 0, zIndex: 300, background: "#0e0e0e", overflow: "visible" }}>
+      <div style={{ borderBottom: "1px solid rgba(255,255,255,0.15)", padding: "0 24px", position: "sticky", top: 0, zIndex: 300, background: "#2C4A8C", overflow: "visible" }}>
         <div style={{ maxWidth: 1400, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 60 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span className="crm-title" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, letterSpacing: 3, color: "#E8A838" }}>WINDSOR CRM</span>
-            <span className="crm-tagline" style={{ fontSize: 11, color: "#555", letterSpacing: 2 }}>CRM v1.0</span>
+            <span className="crm-title" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, letterSpacing: 3, color: "#ffffff" }}>WINDSOR CRM</span>
+            <span className="crm-tagline" style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", letterSpacing: 2 }}>CRM v1.0</span>
             {isAdmin && <span className="admin-badge crm-admin-badge">ADMIN</span>}
           </div>
 
@@ -1568,9 +1568,9 @@ export default function CRM() {
 
         {/* BASE DE CONOCIMIENTO */}
         {view === "base" && isAdmin && (
-          <div style={{ background: "#161616", border: "1px solid #2a2a2a", borderRadius: 10, padding: 24 }}>
+          <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 24 }}>
             <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 12, color: "#e0e0e0", marginBottom: 4 }}>BASE DE CONOCIMIENTO</div>
+              <div style={{ fontSize: 12, color: "#1a1a1a", marginBottom: 4 }}>BASE DE CONOCIMIENTO</div>
               <div style={{ fontSize: 11, color: "#777" }}>Sube PDFs para que el bot de WhatsApp pueda responder preguntas</div>
             </div>
 
@@ -1581,14 +1581,14 @@ export default function CRM() {
                 placeholder="Título del documento (ej: Cursos Windsor)"
                 value={ragTitulo}
                 onChange={(e) => setRagTitulo(e.target.value)}
-                style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 6, padding: "8px 12px", color: "#e0e0e0", fontSize: 12 }}
+                style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "8px 12px", color: "#1a1a1a", fontSize: 12 }}
               />
               <textarea
                 placeholder="Pega aquí el texto del documento..."
                 value={ragTexto}
                 onChange={(e) => setRagTexto(e.target.value)}
                 rows={8}
-                style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: 6, padding: "8px 12px", color: "#e0e0e0", fontSize: 12, resize: "vertical", fontFamily: "inherit" }}
+                style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "8px 12px", color: "#1a1a1a", fontSize: 12, resize: "vertical", fontFamily: "inherit" }}
               />
               <button
                 className="btn btn-primary"
@@ -1607,13 +1607,13 @@ export default function CRM() {
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {documentos.map((doc) => (
-                  <div key={doc.id} style={{ borderRadius: 8, border: "1px solid #2a2a2a", fontSize: 12, overflow: "hidden" }}>
+                  <div key={doc.id} style={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12, overflow: "hidden" }}>
                     <div
                       style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", cursor: "pointer" }}
                       onClick={() => setExpandedDoc(expandedDoc === doc.id ? null : doc.id)}
                     >
                       <div>
-                        <div style={{ color: "#e0e0e0", marginBottom: 2 }}>{doc.titulo || "Sin título"}</div>
+                        <div style={{ color: "#1a1a1a", marginBottom: 2 }}>{doc.titulo || "Sin título"}</div>
                         <div style={{ color: "#555", fontSize: 11 }}>{doc.contenido?.slice(0, 80)}...</div>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -1629,23 +1629,23 @@ export default function CRM() {
                       </div>
                     </div>
                     {expandedDoc === doc.id && (
-                      <div style={{ padding: "10px 14px", borderTop: "1px solid #2a2a2a" }}>
+                      <div style={{ padding: "10px 14px", borderTop: "1px solid #e2e8f0" }}>
                         {editingDoc === doc.id ? (
                           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                             <input
                               value={editTitulo}
                               onChange={(e) => setEditTitulo(e.target.value)}
-                              style={{ background: "#1a1a1a", border: "1px solid #333", borderRadius: 6, padding: "6px 10px", color: "#e0e0e0", fontSize: 12 }}
+                              style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 10px", color: "#1a1a1a", fontSize: 12 }}
                             />
                             <textarea
                               value={editTexto}
                               onChange={(e) => setEditTexto(e.target.value)}
                               rows={10}
-                              style={{ background: "#1a1a1a", border: "1px solid #333", borderRadius: 6, padding: "6px 10px", color: "#e0e0e0", fontSize: 11, resize: "vertical", fontFamily: "inherit", lineHeight: 1.6 }}
+                              style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 10px", color: "#1a1a1a", fontSize: 11, resize: "vertical", fontFamily: "inherit", lineHeight: 1.6 }}
                             />
                             <div style={{ display: "flex", gap: 8 }}>
                               <button className="btn btn-primary" onClick={() => saveDocumento(doc.id)}>Guardar y re-indexar</button>
-                              <button className="btn" onClick={() => setEditingDoc(null)} style={{ background: "#1a1a1a", border: "1px solid #333", color: "#aaa", borderRadius: 6, padding: "6px 14px", fontSize: 12, cursor: "pointer" }}>Cancelar</button>
+                              <button className="btn" onClick={() => setEditingDoc(null)} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", color: "#aaa", borderRadius: 6, padding: "6px 14px", fontSize: 12, cursor: "pointer" }}>Cancelar</button>
                             </div>
                           </div>
                         ) : (
@@ -1662,9 +1662,9 @@ export default function CRM() {
 
         {/* CONFIGURACIÓN DEL BOT */}
         {view === "bot" && isAdmin && (
-          <div style={{ background: "#161616", border: "1px solid #2a2a2a", borderRadius: 10, padding: 24 }}>
+          <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 24 }}>
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 12, color: "#e0e0e0", marginBottom: 4 }}>CONFIGURACIÓN DEL BOT</div>
+              <div style={{ fontSize: 12, color: "#1a1a1a", marginBottom: 4 }}>CONFIGURACIÓN DEL BOT</div>
               <div style={{ fontSize: 11, color: "#777" }}>
                 Aquí defines la identidad y la forma en que debe comportarse el bot. Esta configuración se guarda desde el CRM y, por ahora, no reemplaza el flujo actual en producción.
               </div>
@@ -1681,11 +1681,11 @@ export default function CRM() {
               rows={14}
               style={{
                 width: "100%",
-                background: "#1a1a1a",
-                border: "1px solid #333",
+                background: "#f8fafc",
+                border: "1px solid #e2e8f0",
                 borderRadius: 8,
                 padding: "12px 14px",
-                color: "#e0e0e0",
+                color: "#1a1a1a",
                 fontSize: 12,
                 lineHeight: 1.7,
                 resize: "vertical",
@@ -1711,17 +1711,17 @@ export default function CRM() {
         )}
 
         {view === "lab" && isAdmin && (
-          <div style={{ background: "#161616", border: "1px solid #2a2a2a", borderRadius: 10, padding: 24 }}>
+          <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 24 }}>
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 12, color: "#e0e0e0", marginBottom: 4 }}>LAB BOT</div>
+              <div style={{ fontSize: 12, color: "#1a1a1a", marginBottom: 4 }}>LAB BOT</div>
               <div style={{ fontSize: 11, color: "#777" }}>
                 Simula cómo se comportaría el bot según el escenario del lead, sin afectar el bot productivo.
               </div>
             </div>
 
             <div className="lab-grid" style={{ display: "grid", gridTemplateColumns: "1.2fr 1.8fr", gap: 16 }}>
-              <div className="lab-state-panel" style={{ background: "#111", border: "1px solid #2a2a2a", borderRadius: 10, padding: 16 }}>
-                <div style={{ fontSize: 11, color: "#999", marginBottom: 8 }}>ESCENARIO</div>
+              <div className="lab-state-panel" style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 16 }}>
+                <div style={{ fontSize: 11, color: "#64748b", marginBottom: 8 }}>ESCENARIO</div>
                 <select
                   className="select"
                   value={labScenario}
@@ -1778,8 +1778,8 @@ export default function CRM() {
                   )}
                 </div>
 
-                <div style={{ background: "#0f0f0f", border: "1px solid #222", borderRadius: 8, padding: 12 }}>
-                  <div style={{ fontSize: 11, color: "#999", marginBottom: 8 }}>ESTADO DEL LEAD</div>
+                <div style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12 }}>
+                  <div style={{ fontSize: 11, color: "#64748b", marginBottom: 8 }}>ESTADO DEL LEAD</div>
                   <div className="lab-state-compact" style={{ fontSize: 12, color: "#ddd", lineHeight: 1.8 }}>
                     <div><strong>Origen:</strong> {labState.origen || labScenario}</div>
                     <div><strong>Nombre:</strong> {labState.nombre || "—"}</div>
@@ -1791,9 +1791,9 @@ export default function CRM() {
                 </div>
               </div>
 
-              <div className="lab-chat-panel" style={{ background: "#111", border: "1px solid #2a2a2a", borderRadius: 10, padding: 16, display: "flex", flexDirection: "column", minHeight: 480 }}>
-                <div style={{ fontSize: 11, color: "#999", marginBottom: 12 }}>CHAT DE PRUEBA</div>
-                <div style={{ flex: 1, background: "#0c0c0c", border: "1px solid #1f1f1f", borderRadius: 8, padding: 12, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
+              <div className="lab-chat-panel" style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 16, display: "flex", flexDirection: "column", minHeight: 480 }}>
+                <div style={{ fontSize: 11, color: "#64748b", marginBottom: 12 }}>CHAT DE PRUEBA</div>
+                <div style={{ flex: 1, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
                   {!labStarted && (
                     <div style={{ fontSize: 12, color: "#666" }}>
                       Selecciona un escenario y empieza la simulación para probar cómo hablaría el bot.
@@ -1804,8 +1804,8 @@ export default function CRM() {
                       key={`${msg.role}-${idx}`}
                       style={{
                         alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
-                        background: msg.role === "user" ? "#1f2e4d" : "#1a2f1f",
-                        color: "#e8e8e8",
+                        background: msg.role === "user" ? "#2C4A8C" : "#f1f5f9",
+                        color: msg.role === "user" ? "#ffffff" : "#1a1a1a",
                         border: `1px solid ${msg.role === "user" ? "#3f68b5" : "#2d5a35"}`,
                         borderRadius: 10,
                         padding: "10px 12px",
@@ -1844,23 +1844,23 @@ export default function CRM() {
 
         {/* FLOWS WHATSAPP */}
         {view === "flows" && isAdmin && (
-          <div style={{ background: "#161616", border: "1px solid #2a2a2a", borderRadius: 10, padding: 24 }}>
+          <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 24 }}>
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 12, color: "#e0e0e0", marginBottom: 4 }}>FLOWS WHATSAPP</div>
+              <div style={{ fontSize: 12, color: "#1a1a1a", marginBottom: 4 }}>FLOWS WHATSAPP</div>
               <div style={{ fontSize: 11, color: "#777" }}>
                 Define reglas simples por palabra clave. El bot aplica la primera que coincida antes de usar RAG.
               </div>
             </div>
-            <div style={{ marginBottom: 12, padding: "10px 12px", borderRadius: 8, background: "#111", border: "1px solid #2a2a2a", fontSize: 11, color: "#777", lineHeight: 1.6 }}>
+            <div style={{ marginBottom: 12, padding: "10px 12px", borderRadius: 8, background: "#f8fafc", border: "1px solid #e2e8f0", fontSize: 11, color: "#64748b", lineHeight: 1.6 }}>
               Próximo paso: esta sección evolucionará a un constructor visual del flujo conversacional, tipo canvas, sin quitar la configuración actual por palabra clave.
             </div>
             <div style={{ fontSize: 11, color: "#555", marginBottom: 8 }}>
               Ejemplo: si el mensaje contiene <code>hola</code>, responde un texto fijo. Si contiene <code>precio</code>, usa la base RAG.
             </div>
-            <div style={{ border: "1px solid #2a2a2a", borderRadius: 8, overflow: "hidden" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "2fr 1.2fr 3fr", background: "#111", fontSize: 11, color: "#777" }}>
-                <div style={{ padding: "8px 10px", borderRight: "1px solid #2a2a2a" }}>PALABRA CLAVE CONTIENE</div>
-                <div style={{ padding: "8px 10px", borderRight: "1px solid #2a2a2a" }}>ACCIÓN</div>
+            <div style={{ border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "2fr 1.2fr 3fr", background: "#f8fafc", fontSize: 11, color: "#777" }}>
+                <div style={{ padding: "8px 10px", borderRight: "1px solid #e2e8f0" }}>PALABRA CLAVE CONTIENE</div>
+                <div style={{ padding: "8px 10px", borderRight: "1px solid #e2e8f0" }}>ACCIÓN</div>
                 <div style={{ padding: "8px 10px" }}>RESPUESTA (si es texto fijo)</div>
               </div>
               {flowRules.length === 0 ? (
@@ -1874,11 +1874,11 @@ export default function CRM() {
                     style={{
                       display: "grid",
                       gridTemplateColumns: "2fr 1.2fr 3fr",
-                      borderTop: "1px solid #2a2a2a",
+                      borderTop: "1px solid #e2e8f0",
                       fontSize: 12,
                     }}
                   >
-                    <div style={{ padding: "8px 10px", borderRight: "1px solid #2a2a2a" }}>
+                    <div style={{ padding: "8px 10px", borderRight: "1px solid #e2e8f0" }}>
                       <input
                         value={rule.match}
                         onChange={(e) => {
@@ -1890,16 +1890,16 @@ export default function CRM() {
                         placeholder="ej. hola"
                         style={{
                           width: "100%",
-                          background: "#1a1a1a",
-                          border: "1px solid #333",
+                          background: "#f8fafc",
+                          border: "1px solid #e2e8f0",
                           borderRadius: 4,
                           padding: "6px 8px",
-                          color: "#e0e0e0",
+                          color: "#1a1a1a",
                           fontSize: 12,
                         }}
                       />
                     </div>
-                    <div style={{ padding: "8px 10px", borderRight: "1px solid #2a2a2a" }}>
+                    <div style={{ padding: "8px 10px", borderRight: "1px solid #e2e8f0" }}>
                       <select
                         value={rule.type === "rag" ? "rag" : "fixed"}
                         onChange={(e) => {
@@ -1912,11 +1912,11 @@ export default function CRM() {
                         }}
                         style={{
                           width: "100%",
-                          background: "#1a1a1a",
-                          border: "1px solid #333",
+                          background: "#f8fafc",
+                          border: "1px solid #e2e8f0",
                           borderRadius: 4,
                           padding: "6px 8px",
-                          color: "#e0e0e0",
+                          color: "#1a1a1a",
                           fontSize: 12,
                         }}
                       >
@@ -1938,11 +1938,11 @@ export default function CRM() {
                           placeholder="Texto que enviará el bot"
                           style={{
                             flex: 1,
-                            background: "#1a1a1a",
-                            border: "1px solid #333",
+                            background: "#f8fafc",
+                            border: "1px solid #e2e8f0",
                             borderRadius: 4,
                             padding: "6px 8px",
-                            color: "#e0e0e0",
+                            color: "#1a1a1a",
                             fontSize: 12,
                             resize: "vertical",
                           }}
@@ -1977,9 +1977,9 @@ export default function CRM() {
               <button
                 className="btn"
                 style={{
-                  background: "#1a1a1a",
-                  border: "1px solid #333",
-                  color: "#e0e0e0",
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  color: "#1a1a1a",
                   borderRadius: 6,
                   padding: "6px 12px",
                   fontSize: 12,
@@ -2119,12 +2119,12 @@ export default function CRM() {
           height: 52,
           borderRadius: "50%",
           border: "none",
-          background: "#E8A838",
-          color: "#0e0e0e",
+          background: "#2C4A8C",
+          color: "#ffffff",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
+          boxShadow: "0 8px 24px rgba(44,74,140,0.35)",
           cursor: "pointer",
           fontSize: 22,
         }}
@@ -2141,38 +2141,38 @@ export default function CRM() {
             right: 24,
             width: 360,
             maxHeight: 520,
-            background: "#0e0e0e",
+            background: "#ffffff",
             borderRadius: 12,
-            border: "1px solid #2a2a2a",
+            border: "1px solid #e2e8f0",
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
-            boxShadow: "0 16px 40px rgba(0,0,0,0.6)",
+            boxShadow: "0 16px 40px rgba(0,0,0,0.15)",
             zIndex: 901,
           }}
         >
           <div
             style={{
               padding: "10px 14px",
-              borderBottom: "1px solid #2a2a2a",
+              borderBottom: "1px solid #e2e8f0",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              background: "#111",
+              background: "#f8fafc",
             }}
           >
             <div>
               <div
                 style={{
                   fontSize: 12,
-                  color: "#E8A838",
+                  color: "#2C4A8C",
                   letterSpacing: 1.5,
                   textTransform: "uppercase",
                 }}
               >
                 Asistente Windsor
               </div>
-              <div style={{ fontSize: 11, color: "#777", marginTop: 2 }}>
+              <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>
                 IA enfocada en admisiones y seguimiento de prospectos
               </div>
             </div>
@@ -2202,8 +2202,8 @@ export default function CRM() {
                   alignSelf: m.role === "user" ? "flex-end" : "flex-start",
                   maxWidth: "85%",
                   background:
-                    m.role === "user" ? "#E8A838" : "rgba(255,255,255,0.03)",
-                  color: m.role === "user" ? "#0e0e0e" : "#e0e0e0",
+                    m.role === "user" ? "#2C4A8C" : "#f1f5f9",
+                  color: m.role === "user" ? "#ffffff" : "#1a1a1a",
                   borderRadius: 8,
                   padding: "8px 10px",
                   fontSize: 12,
@@ -2211,7 +2211,7 @@ export default function CRM() {
                   border:
                     m.role === "user"
                       ? "none"
-                      : "1px solid rgba(255,255,255,0.05)",
+                      : "1px solid #e2e8f0",
                 }}
               >
                 {m.content}
@@ -2222,7 +2222,7 @@ export default function CRM() {
                 style={{
                   alignSelf: "flex-start",
                   fontSize: 11,
-                  color: "#777",
+                  color: "#64748b",
                 }}
               >
                 Pensando recomendaciones...
@@ -2232,9 +2232,9 @@ export default function CRM() {
 
           <div
             style={{
-              borderTop: "1px solid #2a2a2a",
+              borderTop: "1px solid #e2e8f0",
               padding: "8px 10px",
-              background: "#111",
+              background: "#f8fafc",
               display: "flex",
               gap: 6,
             }}
@@ -2265,7 +2265,7 @@ export default function CRM() {
       )}
 
       {toast && (
-        <div className="toast" style={{ background: toast.type === "error" ? "#2a0d0d" : "#0d2018", border: `1px solid ${toast.type === "error" ? "#E85D38" : "#27AE60"}44`, color: toast.type === "error" ? "#E85D38" : "#27AE60" }}>
+        <div className="toast" style={{ background: toast.type === "error" ? "#fee2e2" : "#dcfce7", border: `1px solid ${toast.type === "error" ? "#fca5a5" : "#86efac"}`, color: toast.type === "error" ? "#991b1b" : "#15803d" }}>
           {toast.msg}
         </div>
       )}
