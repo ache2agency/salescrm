@@ -932,11 +932,13 @@ ${link}`
 // Pendiente: agregar link del PDF del examen cuando el usuario lo proporcione
 const EXAMEN_UBICACION_MSG = `¡Perfecto! 😊 El examen de ubicación es completamente *gratuito* y te tomará solo unos minutos.
 
-Te enviamos las instrucciones paso a paso para realizarlo:
+Por favor haz clic en la liga, revisa el manual y sigue los pasos indicados:
 
-📄 *Instrucciones del examen:* [PENDIENTE — link PDF]
+📄 https://drive.google.com/file/d/1Ej1ZXKYnqFIi9J0SVrRyBHmAb-ohZ7A_/view?usp=sharing
 
-Una vez que lo termines, confírmanos aquí por WhatsApp y te agendaremos tu clase de prueba gratuita. 🎓`
+Al finalizar, en la parte superior de la pantalla tendrás tu puntaje — toma una foto y envíanosla por este medio. 📸
+
+Una vez que lo termines, te agendaremos tu clase de prueba gratuita. 🎓`
 
 function buildClasePruebaMsg(nombre?: string | null, email?: string | null, programa?: string | null, telefono?: string | null): string {
   const link = buildAgendarLink('clase_prueba', nombre, email, programa, telefono)
