@@ -298,64 +298,80 @@ async function getDefaultAssigneeId(
   supabase: Awaited<ReturnType<typeof createServiceRoleClient>>
 ): Promise<string | null> {
   try {
-    // Hora actual en México
-    const mexicoTime = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Mexico_City' }))
-    const day  = mexicoTime.getDay()   // 0=Dom, 1=Lun, 2=Mar, 3=Mié, 4=Jue, 5=Vie, 6=Sáb
-    const hour = mexicoTime.getHours()
+    const mxNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Mexico_City' }))
+    const day = mxNow.getDay()   // 0=Dom 1=Lun 2=Mar 3=Mié 4=Jue 5=Vie 6=Sáb
+    const mins = mxNow.getHours() * 60 + mxNow.getMinutes()
 
-    const isMatutino  = hour >= 8  && hour < 15
-    const isVespertino = hour >= 16 && hour < 22
-
-    // Buscar asesores por nombre (parcial, sin distinguir mayúsculas)
-    const { data: perfiles } = await supabase
-      .from('profiles')
-      .select('id, nombre')
-
-    const get = (nombre: string) =>
-      perfiles?.find(p => p.nombre?.toLowerCase().includes(nombre.toLowerCase()))?.id ?? null
+    const { data: perfiles } = await supabase.from('profiles').select('id, nombre')
+    const get = (n: string) =>
+      perfiles?.find((p: any) => p.nombre?.toLowerCase().includes(n.toLowerCase()))?.id ?? null
 
     const aide  = get('aide')
     const edgar = get('edgar')
     const irene = get('irene')
 
-    // ── Horario de turno ────────────────────────────────────────────────────
-    // Lun(1), Mié(3), Vie(5): Mat=Aide  | Vesp=Irene
-    // Mar(2), Jue(4):          Mat=Edgar | Vesp=Edgar
-    // Sáb(6), Dom(0), fuera de horario: Round-robin
-    let assigneeId: string | null = null
-
-    if (isMatutino) {
-      if ([1, 3, 5].includes(day)) assigneeId = aide
-      else if ([2, 4].includes(day)) assigneeId = edgar
-    } else if (isVespertino) {
-      if ([1, 3, 5].includes(day)) assigneeId = irene
-      else if ([2, 4].includes(day)) assigneeId = edgar
+    // ── Roll de guardias sábados enero–julio 2026 ────────────────────────────
+    const rollSabados: Record<string, string | null> = {
+      '2026-01-10': aide,  '2026-01-17': irene, '2026-01-24': edgar,
+      '2026-01-31': aide,  '2026-02-07': irene, '2026-02-14': edgar,
+      '2026-02-21': aide,  '2026-02-28': irene, '2026-03-07': edgar,
+      '2026-03-14': aide,  '2026-03-21': irene, '2026-03-28': edgar,
+      // 04-abr y 11-abr: Semana Santa (festivos)
+      '2026-04-18': aide,  '2026-04-25': irene, '2026-05-02': edgar,
+      '2026-05-09': aide,  '2026-05-16': irene, '2026-05-23': edgar,
+      '2026-05-30': aide,  '2026-06-06': irene, '2026-06-13': edgar,
+      '2026-06-20': aide,  '2026-06-27': irene, '2026-07-04': edgar,
+      '2026-07-11': aide,  '2026-07-18': irene,
     }
 
-    // Round-robin para Sáb, Dom y fuera de horario
-    if (!assigneeId) {
-      const todos = [aide, edgar, irene].filter(Boolean) as string[]
-      if (todos.length === 0) return null
-
-      const { data: ultimoLead } = await supabase
-        .from('leads')
-        .select('asignado_a')
-        .in('asignado_a', todos)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-
-      const ultimoIdx = ultimoLead?.asignado_a
-        ? todos.indexOf(ultimoLead.asignado_a as string)
-        : -1
-
-      assigneeId = todos[(ultimoIdx + 1) % todos.length]
+    const getSabKey = (date: Date): string => {
+      const d = new Date(date)
+      const dow = d.getDay()
+      // días a retroceder para llegar al sábado de esa semana
+      const offset = dow === 6 ? 0 : dow === 0 ? 1 : dow + 1
+      d.setDate(d.getDate() - offset)
+      const y  = d.getFullYear()
+      const mo = String(d.getMonth() + 1).padStart(2, '0')
+      const da = String(d.getDate()).padStart(2, '0')
+      return `${y}-${mo}-${da}`
     }
 
-    return assigneeId
+    const getSabAsesor = (date: Date): string | null =>
+      rollSabados[getSabKey(date)] ?? aide
+
+    // ── Asignar al asesor que retome antes ──────────────────────────────────
+    //
+    // Horario completo:
+    //   Lun/Mié/Vie  mat 8-15: Aide   | vesp 16-20:30: Irene
+    //   Mar/Jue      mat 8-15: Edgar  | vesp 16-20:30: Irene
+    //   Sáb          mat 8-15: Roll   | tarde: sin cobertura → Aide (lunes)
+    //   Dom          sin cobertura    → Aide (lunes)
+    //   Entre turnos (15-16h, Lun-Vie): Irene abre en <1h
+
+    // Sábado
+    if (day === 6) {
+      if (mins < 15 * 60) return getSabAsesor(mxNow)  // turno sáb activo
+      return aide                                        // sáb tarde/noche → abre Aide el lunes
+    }
+
+    // Domingo → Aide abre el lunes
+    if (day === 0) return aide
+
+    // Lunes–Viernes
+    const matAsesor = [1, 3, 5].includes(day) ? aide : edgar  // Lun/Mié/Vie=Aide, Mar/Jue=Edgar
+
+    if (mins < 8 * 60)   return matAsesor   // madrugada → abre el matutino de hoy
+    if (mins < 15 * 60)  return matAsesor   // turno matutino activo
+    if (mins < 16 * 60)  return irene       // entre turnos (15-16h) → Irene abre en <1h
+    if (mins < 20 * 60 + 30) return irene  // turno vespertino activo
+
+    // Después de 20:30: asesor del matutino del día siguiente
+    if (day === 5) return getSabAsesor(mxNow)  // Vie noche → roll del sábado
+    // Lun→Mar=Edgar, Mar→Mié=Aide, Mié→Jue=Edgar, Jue→Vie=Aide
+    return [1, 3].includes(day) ? edgar : aide
+
   } catch (e) {
     console.error('[getDefaultAssigneeId] error:', e)
-    // Fallback: primer admin
     const { data } = await supabase.from('profiles').select('id').eq('rol', 'admin').limit(1).maybeSingle()
     return (data?.id as string | undefined) ?? null
   }
