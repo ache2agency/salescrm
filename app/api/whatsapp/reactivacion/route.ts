@@ -80,7 +80,7 @@ async function enviarWhatsApp(
 }
 
 const HORAS_REACTIVACION_BOT = 20
-const HORAS_VENTANA_MAX = 23 // no enviar si ya pasaron 23h (fuera de ventana WhatsApp)
+const HORAS_VENTANA_MAX = 28 // ventana ampliada para cron diario (puede haber hasta 28h de silencio)
 
 async function reactivarConversacionesBot(
   supabase: ReturnType<typeof createServiceRoleClient>,
