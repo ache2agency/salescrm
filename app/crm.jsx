@@ -903,7 +903,7 @@ export default function CRM() {
 
   const filteredLeads = leads.filter(l => {
     const matchV = filterVendedor === "Todos" || l.asignado_a === filterVendedor;
-    const matchS = l.nombre.toLowerCase().includes(search.toLowerCase()) || l.email.toLowerCase().includes(search.toLowerCase());
+    const matchS = (l.nombre || l.whatsapp || '').toLowerCase().includes(search.toLowerCase()) || (l.email || '').toLowerCase().includes(search.toLowerCase());
     return matchV && matchS;
   });
 
@@ -1125,7 +1125,7 @@ export default function CRM() {
 
   const openWA = (lead) => {
     const template = WA_TEMPLATES[normalizeStage(lead.stage)] || WA_TEMPLATES["primer_contacto"];
-    const msg = encodeURIComponent(template(lead.nombre.split(" ")[0], lead.curso));
+    const msg = encodeURIComponent(template((lead.nombre || '').split(" ")[0] || 'estimado/a', lead.curso));
     const num = lead.whatsapp.replace(/\D/g, "");
     window.open(`https://wa.me/${num}?text=${msg}`, "_blank");
   };
@@ -1508,9 +1508,9 @@ export default function CRM() {
         )}
       </div>
 
-      <div style={{ maxWidth: 1400, margin: "0 auto", padding: "24px" }}>
+      <div style={{ maxWidth: 1400, margin: "0 auto", padding: view === "convs" ? "0 24px" : "24px" }}>
         {/* STATS */}
-        <div className="stat-card-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
+        <div className="stat-card-grid" style={{ display: view === "convs" ? "none" : "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
           {[
             { label: "PIPELINE TOTAL", value: formatPeso(pipelineValue), sub: `${filteredLeads.filter((l) => !["inscrito","perdido","archivado"].includes(normalizeStage(l.stage))).length} leads activos`, color: "#4A90D9" },
             { label: "INSCRITOS", value: formatPeso(totalRevenue), sub: `${leads.filter((l) => normalizeStage(l.stage) === "inscrito").length} cierres`, color: "#27AE60" },
@@ -1526,7 +1526,7 @@ export default function CRM() {
         </div>
 
         {/* FILTROS */}
-        <div style={{ display: "flex", gap: 12, marginBottom: 24, alignItems: "center" }}>
+        <div style={{ display: view === "convs" ? "none" : "flex", gap: 12, marginBottom: 24, alignItems: "center" }}>
           <input className="input" style={{ maxWidth: 260 }} placeholder="🔍  Buscar lead..." value={search} onChange={e => setSearch(e.target.value)} />
           {isAdmin && (
             <select className="select" style={{ maxWidth: 200 }} value={filterVendedor} onChange={e => setFilterVendedor(e.target.value)}>
