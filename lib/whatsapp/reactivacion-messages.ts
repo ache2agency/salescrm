@@ -133,6 +133,53 @@ const TRACK_B: Partial<Record<ReactivationStageKey, { intento1: string; intento2
   },
 }
 
+/**
+ * Mensajes de reactivación automática a las 20h — basados en la fase del bot donde se quedó el usuario.
+ * Se envían dentro de la ventana de 24h de WhatsApp (mensaje libre, sin template).
+ */
+export type FaseBotKey = 'accion' | 'correo' | 'programa' | 'dudas' | 'inscripcion' | 'examen' | 'info_enviada'
+
+const REACTIVACION_20H: Record<FaseBotKey, { trackA: string; trackB: string }> = {
+  accion: {
+    trackA: 'Hola [nombre] 👋 ¿Pudiste revisar la información que te compartimos? Cuando quieras seguimos, estamos aquí para ayudarte. 😊',
+    trackB: 'Hola [nombre] 👋 ¿Pudiste revisar la información que te compartimos? Cuando quieras seguimos, estamos aquí para ayudarte. 😊',
+  },
+  correo: {
+    trackA: 'Hola [nombre] 👋 Quedamos en espera de tu correo para enviarte la información completa. ¿Me lo compartes cuando puedas? 😊',
+    trackB: 'Hola [nombre] 👋 Quedamos en espera de tu correo para enviarte la información completa. ¿Me lo compartes cuando puedas? 😊',
+  },
+  programa: {
+    trackA: 'Hola [nombre] 👋 ¿Ya pudiste revisar nuestra oferta educativa? Con gusto te ayudo a elegir el programa que más se adapte a ti. 😊',
+    trackB: 'Hola [nombre] 👋 ¿Ya pudiste revisar nuestra oferta educativa? Con gusto te ayudo a elegir el programa que más se adapte a ti. 😊',
+  },
+  dudas: {
+    trackA: 'Hola [nombre] 👋 ¿Quedó alguna duda sin resolver? Estoy aquí para ayudarte. 😊',
+    trackB: 'Hola [nombre] 👋 ¿Quedó alguna duda sin resolver? Estoy aquí para ayudarte. 😊',
+  },
+  inscripcion: {
+    trackA: 'Hola [nombre] 👋 ¿Pudiste avanzar con tu proceso de inscripción? Si tienes alguna duda con los documentos o el pago, con gusto te ayudo. 😊',
+    trackB: 'Hola [nombre] 👋 ¿Pudiste avanzar con tu proceso de inscripción? Si tienes alguna duda con los documentos o el pago, con gusto te ayudo. 😊',
+  },
+  examen: {
+    trackA: 'Hola [nombre] 👋 ¿Pudiste realizar tu examen de ubicación? Recuerda que es gratuito y el primer paso para unirte a Windsor. 😊',
+    trackB: 'Hola [nombre] 👋 ¿Pudiste realizar tu examen de ubicación? Recuerda que es gratuito y el primer paso para unirte a Windsor. 😊',
+  },
+  info_enviada: {
+    trackA: 'Hola [nombre] 👋 ¿Pudiste revisar la información que te compartimos? Cuando quieras seguimos. 😊',
+    trackB: 'Hola [nombre] 👋 ¿Pudiste revisar la información que te compartimos? Cuando quieras seguimos. 😊',
+  },
+}
+
+export function obtenerMensajeReactivacion20h(
+  fase: string,
+  trackA: boolean,
+  nombre: string
+): string {
+  const key = (REACTIVACION_20H[fase as FaseBotKey] ? fase : 'accion') as FaseBotKey
+  const plantilla = trackA ? REACTIVACION_20H[key].trackA : REACTIVACION_20H[key].trackB
+  return replaceNombre(plantilla, nombre)
+}
+
 export function obtenerMensajeReactivacion(
   etapa: ReactivationStageKey,
   intento: 1 | 2,

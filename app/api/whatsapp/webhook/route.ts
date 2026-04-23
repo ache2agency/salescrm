@@ -42,7 +42,8 @@ async function logBotMessageAndUpdateFase(
   supabase: Awaited<ReturnType<typeof createServiceRoleClient>>,
   conversacionId: string,
   message: string,
-  nextFase?: string
+  nextFase?: string,
+  leadId?: string | null
 ) {
   await supabase.from('whatsapp_mensajes').insert([
     { conversacion_id: conversacionId, rol: 'bot', contenido: message },
@@ -60,6 +61,32 @@ async function logBotMessageAndUpdateFase(
     .from('whatsapp_conversaciones')
     .update(update)
     .eq('id', conversacionId)
+
+  // Mover stage del lead automáticamente según la fase del bot
+  if (leadId && nextFase) {
+    const FASE_A_STAGE: Record<string, string> = {
+      accion:       'primer_contacto',
+      examen:       'examen_ubicacion',
+      clase_prueba: 'clase_muestra',
+      inscripcion:  'inscripcion_pendiente',
+    }
+    const nuevoStage = FASE_A_STAGE[nextFase]
+    if (nuevoStage) {
+      // Para primer_contacto solo asignar si el lead no tiene stage aún
+      // Para las demás fases, siempre avanzar (no retroceder)
+      const ORDEN_STAGES = ['primer_contacto', 'examen_ubicacion', 'clase_muestra', 'inscripcion_pendiente', 'inscrito']
+      if (nuevoStage === 'primer_contacto') {
+        await supabase.from('leads').update({ stage: nuevoStage }).eq('id', leadId).is('stage', null)
+      } else {
+        const { data: lead } = await supabase.from('leads').select('stage').eq('id', leadId).maybeSingle()
+        const posActual = ORDEN_STAGES.indexOf(lead?.stage || '')
+        const posNuevo = ORDEN_STAGES.indexOf(nuevoStage)
+        if (posNuevo > posActual) {
+          await supabase.from('leads').update({ stage: nuevoStage }).eq('id', leadId)
+        }
+      }
+    }
+  }
 }
 
 type ConversationRow = {
@@ -107,6 +134,15 @@ function hasLeadName(nombre: string | null | undefined, whatsapp: string | null 
   if (!value || value.length < 2) return false
   if (value === String(whatsapp || '').trim()) return false
   if (/@/.test(value)) return false
+  // Rechazar si tiene más de 4 palabras (nombres reales tienen máx 4)
+  if (value.split(/\s+/).length > 4) return false
+  // Rechazar si contiene dígitos
+  if (/\d/.test(value)) return false
+  // Rechazar si contiene signos de puntuación o interrogación (es una frase)
+  if (/[¿?¡!,;:.\/\\]/.test(value)) return false
+  // Rechazar palabras que claramente no son nombres propios
+  const noNombres = /^(hola|buenas?|buen|d[ií]a|tardes?|noches?|info|informaci[oó]n|costos?|precios?|quiero|quisiera|necesito|ayuda|gracias|ok|s[ií]|no|nada|nope|oye|hey|buenos|saludos|permiso|disculp)$/i
+  if (noNombres.test(value.trim())) return false
   return true
 }
 
@@ -1076,9 +1112,10 @@ A) Tengo más dudas
 B) Quiero inscribirme [o "B) Quiero mi clase de prueba" si es inglés]
 Si elige A → siguienteFase: dudas. Si elige B → siguienteFase: inscripcion (o clase_prueba si es inglés).`,
 
-    accion: `Presenta las opciones para el siguiente paso:
-Si el programa es inglés (niños o adultos): A) Tengo dudas  B) Quiero agendar mi clase de prueba gratuita → siguienteFase: clase_prueba
-Para todos los demás programas: A) Tengo dudas  B) Quiero inscribirme → siguienteFase: inscripcion
+    accion: `Si el prospecto hace una pregunta (sobre costos, horarios, uniformes, materiales, requisitos, etc.), respóndela primero con datos concretos de la BASE y luego presenta las opciones. Si solo responde con A/B o no hace ninguna pregunta, presenta directamente las opciones.
+Opciones a presentar:
+- Si el programa es inglés (niños o adultos): A) Tengo dudas  B) Quiero agendar mi clase de prueba gratuita → siguienteFase: clase_prueba
+- Para todos los demás programas: A) Tengo dudas  B) Quiero inscribirme → siguienteFase: inscripcion
 Si elige A → siguienteFase: dudas.`,
 
     asesor: `INFORMACIÓN DE CONTACTO DE LOS PLANTELES:
@@ -1221,7 +1258,7 @@ export async function POST(request: Request) {
     }
 
     const provider = incoming.provider || getWhatsAppProvider()
-    const originalText = incoming.body.trim()
+    const originalText = incoming.body.trim().normalize('NFC')
     const text = originalText.toLowerCase()
     const waNumber = incoming.waNumber || ''
     const profileName = incoming.profileName || ''
@@ -1248,19 +1285,18 @@ export async function POST(request: Request) {
 
         if (!leadId) {
           const today = new Date().toISOString().slice(0, 10)
-          const nombre = profileName || whatsappValue
           const defaultAssignee = await getDefaultAssigneeId(supabase)
 
           const { data: insertedLead } = await supabase
             .from('leads')
             .insert([
               {
-                nombre,
+                nombre: '',
                 email: '',
                 whatsapp: whatsappValue,
                 curso: 'WhatsApp - Instituto Windsor',
                 valor: 0,
-                notas: 'Lead creado automáticamente desde WhatsApp.',
+                notas: `Lead creado automáticamente desde WhatsApp.${profileName ? ' Nombre WA: ' + profileName : ''}`,
                 stage: 'contactado',
                 fecha: today,
                 ...(defaultAssignee ? { asignado_a: defaultAssignee } : {}),
@@ -1352,21 +1388,42 @@ export async function POST(request: Request) {
         currentFase = (conversacionRow?.fase as string) || 'saludo'
 
         // Registrar mensaje del usuario
+        let myMessageId: string | undefined
         if (conversacionId) {
-          await supabase.from('whatsapp_mensajes').insert([
+          const { data: insertedUserMsg } = await supabase.from('whatsapp_mensajes').insert([
             {
               conversacion_id: conversacionId,
               rol: 'usuario',
               contenido: originalText || '',
               raw_payload: incoming.rawPayload,
             },
-          ])
+          ]).select('id').single()
+
+          myMessageId = insertedUserMsg?.id
 
           // actualizar timestamp de último mensaje
           await supabase
             .from('whatsapp_conversaciones')
             .update({ ultimo_mensaje_at: new Date().toISOString() })
             .eq('id', conversacionId)
+
+          // Anti-duplicados: esperar y verificar que no llegó un mensaje más reciente
+          await new Promise(r => setTimeout(r, 800))
+          const { data: latestUserMsg } = await supabase
+            .from('whatsapp_mensajes')
+            .select('id')
+            .eq('conversacion_id', conversacionId)
+            .eq('rol', 'usuario')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+
+          if (latestUserMsg?.id && latestUserMsg.id !== myMessageId) {
+            // Llegó un mensaje más reciente — ceder el procesamiento a esa instancia
+            return provider === 'twilio'
+              ? buildTwiml('')
+              : Response.json({ ok: true })
+          }
         }
 
         // Cargar resumen del lead para "memoria" del bot
@@ -1581,8 +1638,39 @@ export async function POST(request: Request) {
           return buildProviderResponse(provider, correoMsg, waNumber)
         }
 
-        // Sin programa identificado — catálogo hardcodeado (sin GPT)
+        // Sin programa identificado — diferenciar entre categoría genérica, carrera no ofrecida, o mensaje ambiguo
         const nombreP = leadSnapshot?.nombre
+        const msgTrimP = originalText.trim()
+
+        // Caso 1: el usuario pidió una categoría genérica (ej: "licenciaturas", "maestrías")
+        const categoriaGenerica = msgTrimP.match(/^licenciaturas?$/i)
+          ? `Tenemos las siguientes licenciaturas:\n\n• Licenciatura en Inglés\n• Relaciones públicas y mercadotecnia\n• Administración turística\n• Psicología\n\n¿Cuál te interesa? 😊`
+          : msgTrimP.match(/^maestr[ií]as?$/i)
+          ? `Tenemos dos maestrías:\n\n• Maestría en Innovación empresarial\n• Maestría en Multiculturalidad y Plurilingüismo\n\n¿Cuál te interesa? 😊`
+          : msgTrimP.match(/^diplomados?$/i)
+          ? `Contamos con más de 30 diplomados en distintas áreas. ¿Me puedes decir cuál tema te interesa? Por ejemplo: salud, educación, negocios, tecnología... 😊`
+          : msgTrimP.match(/^(cursos?|idiomas?)$/i)
+          ? `Ofrecemos cursos de:\n\n• Inglés para adultos\n• Inglés para niños\n• Francés\n• Italiano\n\n¿Cuál te interesa? 😊`
+          : null
+
+        if (categoriaGenerica) {
+          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, categoriaGenerica, 'programa')
+          return buildProviderResponse(provider, categoriaGenerica, waNumber)
+        }
+
+        // Caso 2: parece una carrera o programa específico que no ofrecemos
+        const palabras = msgTrimP.split(/\s+/).length
+        const pareceCarreraEspecifica =
+          palabras >= 2 ||
+          /m[eé]dic|enfermer|derecho|contadur|ingenier|arquitect|qu[ií]mic|biolog|nutric|odontolog|veterinar|farmac|f[ií]sica|matem|historia|filosof|geograf|econom|sociolog|antropolog|comunicaci[oó]n|periodis|artes?|diseño|música|danza|teatro|cine|fotograf/i.test(msgTrimP)
+
+        if (pareceCarreraEspecifica) {
+          const noOfrecemosMsg = `${nombreP ? `Disculpa ${nombreP}, ` : 'Disculpa, '}ese programa no forma parte de nuestra oferta educativa. 😊\n\nEstos son los programas que sí tenemos en Instituto Windsor:\n\n${CATALOGO_OFERTA}`
+          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, noOfrecemosMsg, 'programa')
+          return buildProviderResponse(provider, noOfrecemosMsg, waNumber)
+        }
+
+        // Caso 3: mensaje ambiguo o muy corto — repetir catálogo completo
         const botMessage = nombreP
           ? `¡Hola ${nombreP}! 😊 ¿Qué programa de Instituto Windsor te interesa?\n\n${CATALOGO_OFERTA}`
           : `¡Hola! 😊 ¿Qué programa de Instituto Windsor te interesa?\n\n${CATALOGO_OFERTA}`
@@ -1594,10 +1682,10 @@ export async function POST(request: Request) {
       if (phase === 'accion') {
         if (eligeB(originalText)) {
           if (esInglesIdioma(leadSnapshot?.curso)) {
-            await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, EXAMEN_UBICACION_MSG, 'examen')
+            await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, EXAMEN_UBICACION_MSG, 'examen', leadId)
             return buildProviderResponse(provider, EXAMEN_UBICACION_MSG, waNumber)
           } else {
-            await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, INSCRIPCION_LICS_MSG, 'inscripcion')
+            await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, INSCRIPCION_LICS_MSG, 'inscripcion', leadId)
             return buildProviderResponse(provider, INSCRIPCION_LICS_MSG, waNumber)
           }
         }
@@ -1613,7 +1701,7 @@ export async function POST(request: Request) {
             // Respuesta corta sin sentido: repetir CTA
             const ctaRepeat = buildCTA(leadSnapshot?.curso)
             const msg = `${leadSnapshot?.nombre ? leadSnapshot.nombre + ', ' : ''}¿cuál de estas opciones te interesa?${ctaRepeat}`
-            await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, msg, 'accion')
+            await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, msg, 'accion', leadId)
             return buildProviderResponse(provider, msg, waNumber)
           }
         }
@@ -1625,7 +1713,7 @@ export async function POST(request: Request) {
         if (infoMsg) {
           const cta = buildCTA(leadSnapshot?.curso)
           const msgFull = infoMsg + cta
-          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, msgFull, 'accion')
+          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, msgFull, 'accion', leadId)
           return buildProviderResponse(provider, msgFull, waNumber)
         }
         // Fallback a RAG+GPT para maestrías, diplomados, francés, italiano
@@ -1672,7 +1760,7 @@ export async function POST(request: Request) {
             const ctaCorreo = buildCTA(cursoInfo)
             const ack = emailDetectado ? '¡Perfecto, ya tengo tu correo! 📧\n\n' : ''
             const msgFinal = ack + infoMsgCorreo + ctaCorreo
-            await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, msgFinal, 'accion')
+            await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, msgFinal, 'accion', leadId)
             return buildProviderResponse(provider, msgFinal, waNumber)
           }
           // Fallback RAG+GPT para programas sin INFO_MSG (maestrías, diplomados, etc.)
@@ -1699,7 +1787,7 @@ export async function POST(request: Request) {
           })
           const ack2 = emailDetectado ? '¡Perfecto, ya tengo tu correo! 📧\n\n' : ''
           const msgFallback = ack2 + gptCorreo.respuesta + buildCTA(cursoInfo)
-          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, msgFallback, 'accion')
+          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, msgFallback, 'accion', leadId)
           return buildProviderResponse(provider, msgFallback, waNumber)
         }
 
@@ -1739,7 +1827,7 @@ export async function POST(request: Request) {
             if (infoMsgPC) {
               const ctaPC = buildCTA(programaNuevoPC)
               const msgPC = infoMsgPC + ctaPC
-              await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, msgPC, 'accion')
+              await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, msgPC, 'accion', leadId)
               return buildProviderResponse(provider, msgPC, waNumber)
             }
             // Fallback RAG+GPT para programas sin INFO_MSG
@@ -1767,7 +1855,7 @@ export async function POST(request: Request) {
               ragContext: ragPC,
             })
             const msgPCFull = gptPC.respuesta + buildCTA(programaNuevoPC)
-            await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, msgPCFull, 'accion')
+            await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, msgPCFull, 'accion', leadId)
             return buildProviderResponse(provider, msgPCFull, waNumber)
           }
         }
@@ -1874,8 +1962,36 @@ export async function POST(request: Request) {
           await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, correoMsg, 'correo')
           return buildProviderResponse(provider, correoMsg, waNumber)
         }
-        // Sin programa identificado — catálogo (solo nombre válido, nunca teléfono)
+        // Sin programa identificado — diferenciar entre categoría genérica, carrera no ofrecida, o mensaje ambiguo
         const nombreMostrar = nombreValido ? (gpt.nombre || leadSnapshot?.nombre) : null
+        const msgTrimGPT = originalText.trim()
+
+        const categoriaGenericaGPT = msgTrimGPT.match(/^licenciaturas?$/i)
+          ? `Tenemos las siguientes licenciaturas:\n\n• Licenciatura en Inglés\n• Relaciones públicas y mercadotecnia\n• Administración turística\n• Psicología\n\n¿Cuál te interesa? 😊`
+          : msgTrimGPT.match(/^maestr[ií]as?$/i)
+          ? `Tenemos dos maestrías:\n\n• Maestría en Innovación empresarial\n• Maestría en Multiculturalidad y Plurilingüismo\n\n¿Cuál te interesa? 😊`
+          : msgTrimGPT.match(/^diplomados?$/i)
+          ? `Contamos con más de 30 diplomados en distintas áreas. ¿Me puedes decir cuál tema te interesa? Por ejemplo: salud, educación, negocios, tecnología... 😊`
+          : msgTrimGPT.match(/^(cursos?|idiomas?)$/i)
+          ? `Ofrecemos cursos de:\n\n• Inglés para adultos\n• Inglés para niños\n• Francés\n• Italiano\n\n¿Cuál te interesa? 😊`
+          : null
+
+        if (categoriaGenericaGPT) {
+          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, categoriaGenericaGPT, 'programa')
+          return buildProviderResponse(provider, categoriaGenericaGPT, waNumber)
+        }
+
+        const palabrasGPT = msgTrimGPT.split(/\s+/).length
+        const pareceCarreraEspecificaGPT =
+          palabrasGPT >= 2 ||
+          /m[eé]dic|enfermer|derecho|contadur|ingenier|arquitect|qu[ií]mic|biolog|nutric|odontolog|veterinar|farmac|f[ií]sica|matem|historia|filosof|geograf|econom|sociolog|antropolog|comunicaci[oó]n|periodis|artes?|diseño|música|danza|teatro|cine|fotograf/i.test(msgTrimGPT)
+
+        if (pareceCarreraEspecificaGPT) {
+          const noOfrecemosGPT = `${nombreMostrar ? `Disculpa ${nombreMostrar}, ` : 'Disculpa, '}ese programa no forma parte de nuestra oferta educativa. 😊\n\nEstos son los programas que sí tenemos en Instituto Windsor:\n\n${CATALOGO_OFERTA}`
+          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, noOfrecemosGPT, 'programa')
+          return buildProviderResponse(provider, noOfrecemosGPT, waNumber)
+        }
+
         const botMessage = nombreMostrar
           ? `¡Hola ${nombreMostrar}! 😊 ¿Qué programa de Instituto Windsor te interesa?\n\n${CATALOGO_OFERTA}`
           : `¡Hola! 😊 ¿Qué programa de Instituto Windsor te interesa?\n\n${CATALOGO_OFERTA}`
@@ -1935,7 +2051,7 @@ export async function POST(request: Request) {
         }
       }
 
-      await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, botMessage, nextFase)
+      await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, botMessage, nextFase, leadId)
       return buildProviderResponse(provider, botMessage, waNumber)
     }
 

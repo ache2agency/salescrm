@@ -13,6 +13,7 @@ import {
   HORAS_MIN_ENTRE_INTENTOS,
   normalizarEtapaReactivacion,
   obtenerMensajeReactivacion,
+  obtenerMensajeReactivacion20h,
   type ReactivationStageKey,
 } from '@/lib/whatsapp/reactivacion-messages'
 
@@ -78,6 +79,214 @@ async function enviarWhatsApp(
   await client.messages.create({ from, to: toFormatted, body })
 }
 
+const HORAS_REACTIVACION_BOT = 20
+const HORAS_VENTANA_MAX = 23 // no enviar si ya pasaron 23h (fuera de ventana WhatsApp)
+
+async function reactivarConversacionesBot(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  defaultProvider: WhatsAppProvider
+): Promise<{ conversacion_id: string; accion: string; detalle?: string }[]> {
+  const resultados: { conversacion_id: string; accion: string; detalle?: string }[] = []
+
+  // Buscar conversaciones abiertas del bot con silencio entre 20 y 23 horas
+  const ahora = new Date()
+  const limiteMin = new Date(ahora.getTime() - HORAS_VENTANA_MAX * 60 * 60 * 1000).toISOString()
+  const limiteMax = new Date(ahora.getTime() - HORAS_REACTIVACION_BOT * 60 * 60 * 1000).toISOString()
+
+  const { data: conversaciones } = await supabase
+    .from('whatsapp_conversaciones')
+    .select('id, whatsapp, lead_id, fase, provider, ultimo_mensaje_at')
+    .eq('estado', 'abierta')
+    .eq('modo_humano', false)
+    .gte('ultimo_mensaje_at', limiteMin)
+    .lte('ultimo_mensaje_at', limiteMax)
+    .not('fase', 'in', '("cerrado","perdido","seguimiento","inscrito")')
+
+  for (const conv of conversaciones || []) {
+    // Verificar que el último mensaje fue del bot (usuario dejó de responder)
+    const { data: ultimoMsg } = await supabase
+      .from('whatsapp_mensajes')
+      .select('rol')
+      .eq('conversacion_id', conv.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (!ultimoMsg || ultimoMsg.rol !== 'bot') {
+      resultados.push({ conversacion_id: conv.id, accion: 'omitido', detalle: 'último mensaje no es del bot' })
+      continue
+    }
+
+    // Verificar que no se haya enviado ya una reactivación en las últimas 24h
+    const { data: reactivacionPrevia } = await supabase
+      .from('whatsapp_mensajes')
+      .select('id')
+      .eq('conversacion_id', conv.id)
+      .eq('rol', 'reactivacion')
+      .gte('created_at', limiteMin)
+      .limit(1)
+      .maybeSingle()
+
+    if (reactivacionPrevia) {
+      resultados.push({ conversacion_id: conv.id, accion: 'omitido', detalle: 'reactivación ya enviada' })
+      continue
+    }
+
+    // Obtener nombre del lead
+    let nombre = 'ahí'
+    if (conv.lead_id) {
+      const { data: lead } = await supabase
+        .from('leads')
+        .select('nombre, curso')
+        .eq('id', conv.lead_id)
+        .maybeSingle()
+      if (lead?.nombre) nombre = lead.nombre.trim()
+      const trackA = esTrackA(lead?.curso)
+      const mensaje = obtenerMensajeReactivacion20h(conv.fase || 'accion', trackA, nombre)
+
+      const provider = (conv.provider as WhatsAppProvider | null) || defaultProvider
+      try {
+        await enviarWhatsApp(conv.whatsapp, mensaje, provider)
+        await supabase.from('whatsapp_mensajes').insert([
+          { conversacion_id: conv.id, rol: 'reactivacion', contenido: mensaje },
+        ])
+        await supabase
+          .from('whatsapp_conversaciones')
+          .update({ ultimo_mensaje_at: new Date().toISOString() })
+          .eq('id', conv.id)
+
+        // Avanzar stage del lead a segundo_contacto si sigue en primer_contacto
+        if (conv.lead_id) {
+          await supabase
+            .from('leads')
+            .update({ stage: 'segundo_contacto' })
+            .eq('id', conv.lead_id)
+            .eq('stage', 'primer_contacto')
+        }
+
+        resultados.push({ conversacion_id: conv.id, accion: 'enviado_20h' })
+      } catch (e: unknown) {
+        resultados.push({ conversacion_id: conv.id, accion: 'error', detalle: e instanceof Error ? e.message : String(e) })
+      }
+    } else {
+      resultados.push({ conversacion_id: conv.id, accion: 'omitido', detalle: 'sin lead_id' })
+    }
+  }
+
+  return resultados
+}
+
+const HORAS_TERCER_CONTACTO = 24
+
+async function moverATercerContacto(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  defaultProvider: WhatsAppProvider
+): Promise<{ lead_id: string; accion: string; detalle?: string }[]> {
+  const resultados: { lead_id: string; accion: string; detalle?: string }[] = []
+
+  const hace24h = new Date(Date.now() - HORAS_TERCER_CONTACTO * 60 * 60 * 1000).toISOString()
+
+  // Buscar leads en segundo_contacto cuya última reactivación fue hace más de 24h sin respuesta del usuario
+  const { data: leads } = await supabase
+    .from('leads')
+    .select('id, nombre, whatsapp, curso, asignado_a')
+    .eq('stage', 'segundo_contacto')
+    .not('whatsapp', 'is', null)
+
+  for (const lead of leads || []) {
+    // Buscar conversación activa
+    const { data: conv } = await supabase
+      .from('whatsapp_conversaciones')
+      .select('id, provider, whatsapp')
+      .eq('lead_id', lead.id)
+      .eq('estado', 'abierta')
+      .order('ultimo_mensaje_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (!conv) {
+      resultados.push({ lead_id: lead.id, accion: 'omitido', detalle: 'sin conversación activa' })
+      continue
+    }
+
+    // Verificar que el último mensaje de reactivación fue hace más de 24h
+    const { data: ultimaReactivacion } = await supabase
+      .from('whatsapp_mensajes')
+      .select('created_at')
+      .eq('conversacion_id', conv.id)
+      .eq('rol', 'reactivacion')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (!ultimaReactivacion || ultimaReactivacion.created_at > hace24h) {
+      resultados.push({ lead_id: lead.id, accion: 'omitido', detalle: 'reactivación reciente o sin reactivación' })
+      continue
+    }
+
+    // Verificar que el usuario no respondió después de la reactivación
+    const { data: respuestaUsuario } = await supabase
+      .from('whatsapp_mensajes')
+      .select('id')
+      .eq('conversacion_id', conv.id)
+      .eq('rol', 'usuario')
+      .gt('created_at', ultimaReactivacion.created_at)
+      .limit(1)
+      .maybeSingle()
+
+    if (respuestaUsuario) {
+      resultados.push({ lead_id: lead.id, accion: 'omitido', detalle: 'usuario respondió después de la reactivación' })
+      continue
+    }
+
+    // Mover a tercer_contacto
+    await supabase.from('leads').update({ stage: 'tercer_contacto' }).eq('id', lead.id)
+
+    // Registrar en lead_activities
+    await supabase.from('lead_activities').insert([{
+      lead_id: lead.id,
+      actor_id: null,
+      event_type: 'tercer_contacto',
+      title: '📲 Lead sin respuesta — requiere contacto manual',
+      detail: `Sin respuesta tras reactivación automática. Requiere intervención del asesor.`,
+      meta: { source: 'cron_reactivacion' },
+    }])
+
+    // Notificar al asesor asignado por WhatsApp
+    if (lead.asignado_a) {
+      const { data: perfil } = await supabase
+        .from('profiles')
+        .select('whatsapp, nombre')
+        .eq('id', lead.asignado_a)
+        .maybeSingle()
+
+      const asesorWhatsapp = perfil?.whatsapp as string | null
+      if (asesorWhatsapp) {
+        const nombre = lead.nombre?.trim() || 'Sin nombre'
+        const programa = lead.curso || ''
+        const msgAsesor = [
+          '📲 Lead sin respuesta — contacto manual requerido',
+          `👤 ${nombre}`,
+          programa ? `📚 ${programa}` : null,
+          `📱 ${lead.whatsapp}`,
+          'El bot ya intentó reactivarlo. Por favor contáctalo directamente.',
+        ].filter(Boolean).join('\n')
+
+        const provider = (conv.provider as WhatsAppProvider | null) || defaultProvider
+        try {
+          await enviarWhatsApp(asesorWhatsapp, msgAsesor, provider)
+        } catch (e) {
+          console.error('[moverATercerContacto] notificación asesor', e)
+        }
+      }
+    }
+
+    resultados.push({ lead_id: lead.id, accion: 'movido_a_tercer_contacto' })
+  }
+
+  return resultados
+}
+
 export async function POST(request: Request) {
   if (!verifyCronSecret(request)) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
@@ -92,6 +301,12 @@ export async function POST(request: Request) {
 
   const supabase = createServiceRoleClient()
   const defaultProvider = getWhatsAppProvider()
+
+  // Reactivación bot a las 20h (dentro de ventana WhatsApp)
+  const resultadosBot = await reactivarConversacionesBot(supabase, defaultProvider)
+
+  // Mover a tercer_contacto leads sin respuesta tras 24h en segundo_contacto
+  const resultadosTercer = await moverATercerContacto(supabase, defaultProvider)
 
   const { data: leads, error: leadsError } = await supabase
     .from('leads')
@@ -268,7 +483,9 @@ export async function POST(request: Request) {
 
   return Response.json({
     ok: true,
-    procesados: resultados.length,
-    resultados,
+    procesados: resultados.length + resultadosBot.length + resultadosTercer.length,
+    reactivacion_bot_20h: resultadosBot,
+    tercer_contacto: resultadosTercer,
+    reactivacion_pipeline: resultados,
   })
 }
