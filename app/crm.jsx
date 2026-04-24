@@ -1508,7 +1508,7 @@ export default function CRM() {
         )}
       </div>
 
-      <div style={{ maxWidth: 1400, margin: "0 auto", padding: view === "convs" ? "0 24px" : "24px" }}>
+      <div style={{ maxWidth: 1400, margin: "0 auto", padding: "24px" }}>
         {/* STATS */}
         <div className="stat-card-grid" style={{ display: view === "convs" ? "none" : "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
           {[
