@@ -1508,8 +1508,7 @@ export default function CRM() {
         )}
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, overflowY: view === "convs" ? "hidden" : "auto" }}>
-      <div style={{ maxWidth: 1400, margin: "0 auto", padding: "24px", height: view === "convs" ? "100%" : "auto", boxSizing: "border-box" }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: view === "convs" ? "hidden" : "auto", maxWidth: 1400, margin: "0 auto", padding: "24px", height: view === "convs" ? "100%" : "auto", boxSizing: "border-box" }}>
         {/* STATS */}
         <div className="stat-card-grid" style={{ display: view === "convs" ? "none" : "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
           {[
@@ -2107,8 +2106,6 @@ export default function CRM() {
         leads={leads}
         guardarCita={guardarCita}
       />
-      </div>{/* cierre maxWidth */}
-      </div>{/* cierre flex scroll */}
 
       {/* CHATBOT IA */}
       <button
