@@ -1375,7 +1375,7 @@ export default function CRM() {
   };
 
   return (
-    <div style={{ fontFamily: "'DM Mono', 'Courier New', monospace", background: "#f5f7fa", height: "100%", color: "#1a1a1a", display: "flex", flexDirection: "column" }}>
+    <div style={{ fontFamily: "'DM Mono', 'Courier New', monospace", background: "#f5f7fa", minHeight: "100vh", color: "#1a1a1a" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Bebas+Neue&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1436,7 +1436,7 @@ export default function CRM() {
       `}</style>
 
       {/* HEADER */}
-      <div style={{ borderBottom: "1px solid rgba(255,255,255,0.15)", padding: "0 24px", flexShrink: 0, zIndex: 300, background: "#2C4A8C", overflow: "visible" }}>
+      <div style={{ borderBottom: "1px solid rgba(255,255,255,0.15)", padding: "0 24px", position: "sticky", top: 0, zIndex: 300, background: "#2C4A8C", overflow: "visible" }}>
         <div style={{ maxWidth: 1400, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 60 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <span className="crm-title" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, letterSpacing: 3, color: "#ffffff" }}>WINDSOR CRM</span>
@@ -1508,7 +1508,8 @@ export default function CRM() {
         )}
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, overflowY: view === "convs" ? "hidden" : "auto", maxWidth: 1400, margin: "0 auto", padding: "24px", height: view === "convs" ? "100%" : "auto", boxSizing: "border-box" }}>
+      {view === "convs" && <style>{`html, body { overflow: hidden; }`}</style>}
+      <div style={{ maxWidth: 1400, margin: "0 auto", padding: "24px" }}>
         {/* STATS */}
         <div className="stat-card-grid" style={{ display: view === "convs" ? "none" : "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
           {[
