@@ -18,9 +18,10 @@ export default async function Home() {
   const nombre = metadata.nombre || user.email?.split('@')[0] || 'Usuario'
 
   return (
-    <div>
+    <div style={{ height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <div style={{
-        padding:20,
+        flexShrink: 0,
+        padding: 20,
         borderBottom:"1px solid #eee",
         display:"flex",
         justifyContent:"space-between",
@@ -47,7 +48,9 @@ export default async function Home() {
         </form>
       </div>
 
-      <CRM />
+      <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+        <CRM />
+      </div>
     </div>
   )
 }

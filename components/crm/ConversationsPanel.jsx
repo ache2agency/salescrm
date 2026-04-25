@@ -81,7 +81,7 @@ export default function ConversationsPanel({
         .wa-root {
           display: grid;
           grid-template-columns: 360px 1fr;
-          height: calc(100vh - 172px);
+          height: 100%;
           border-radius: 10px;
           overflow: hidden;
           box-shadow: 0 2px 12px rgba(0,0,0,0.12);
@@ -150,7 +150,7 @@ export default function ConversationsPanel({
 
         /* mobile */
         @media (max-width: 768px) {
-          .wa-root { grid-template-columns: 1fr; height: calc(100vh - 130px); }
+          .wa-root { grid-template-columns: 1fr; height: 100%; }
           .wa-list { display: ${mobileView === "list" ? "flex" : "none"}; }
           .wa-chat { display: ${mobileView === "chat" ? "flex" : "none"}; }
           .wa-back-btn { display: block !important; }
