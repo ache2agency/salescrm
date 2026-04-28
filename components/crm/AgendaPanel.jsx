@@ -356,7 +356,7 @@ export default function AgendaPanel({ citas, setShowCitaForm, getCitaStatusStyle
     <div style={{
       background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12,
       display: "flex", flexDirection: "column",
-      height: "calc(100vh - 120px)", overflow: "hidden",
+      flex: 1, minHeight: 0, overflow: "hidden",
       fontFamily: "'DM Mono', monospace",
     }}>
 

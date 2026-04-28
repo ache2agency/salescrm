@@ -1554,9 +1554,9 @@ export default function CRM() {
         )}
       </div>
 
-      <div style={{ maxWidth: 1400, margin: "0 auto", padding: "24px", flex: 1, minHeight: 0, display: view === "convs" ? "flex" : "block", flexDirection: "column", overflowY: view === "convs" ? "hidden" : "auto" }}>
+      <div style={{ maxWidth: view === "agenda" ? "none" : 1400, margin: "0 auto", padding: view === "agenda" ? "12px 16px" : "24px", flex: 1, minHeight: 0, display: (view === "convs" || view === "agenda") ? "flex" : "block", flexDirection: "column", overflowY: (view === "convs" || view === "agenda") ? "hidden" : "auto" }}>
         {/* STATS */}
-        <div className="stat-card-grid" style={{ display: view === "convs" ? "none" : "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
+        <div className="stat-card-grid" style={{ display: (view === "convs" || view === "agenda") ? "none" : "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
           {[
             { label: "PIPELINE TOTAL", value: formatPeso(pipelineValue), sub: `${filteredLeads.filter((l) => !["inscrito","perdido","archivado"].includes(normalizeStage(l.stage))).length} leads activos`, color: "#4A90D9" },
             { label: "INSCRITOS", value: formatPeso(totalRevenue), sub: `${leads.filter((l) => normalizeStage(l.stage) === "inscrito").length} cierres`, color: "#27AE60" },
@@ -1572,7 +1572,7 @@ export default function CRM() {
         </div>
 
         {/* FILTROS */}
-        <div style={{ display: view === "convs" ? "none" : "flex", gap: 12, marginBottom: 24, alignItems: "center" }}>
+        <div style={{ display: (view === "convs" || view === "agenda") ? "none" : "flex", gap: 12, marginBottom: 24, alignItems: "center" }}>
           <input className="input" style={{ maxWidth: 260 }} placeholder="🔍  Buscar lead..." value={search} onChange={e => setSearch(e.target.value)} />
           {isAdmin && (
             <select className="select" style={{ maxWidth: 200 }} value={filterVendedor} onChange={e => setFilterVendedor(e.target.value)}>
