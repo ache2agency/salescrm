@@ -9,6 +9,8 @@ export default function KanbanBoard({
   handleDrop,
   setSelectedLead,
   getNombreVendedor,
+  goToConversation,
+  hasConversation,
 }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: `repeat(${STAGES.length}, 1fr)`, gap: 14, overflowX: "auto" }}>
@@ -41,7 +43,7 @@ export default function KanbanBoard({
                 onClick={() => setSelectedLead(lead)}
                 style={{ padding: 12, opacity: dragId === lead.id ? 0.7 : 1 }}
               >
-                <div style={{ fontSize: 13, fontWeight: 500, color: "#e8e8e8", marginBottom: 4 }}>{lead.nombre}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#111", marginBottom: 4 }}>{lead.nombre || lead.whatsapp}</div>
                 <div style={{ fontSize: 10, color: "#555", marginBottom: 8 }}>{lead.curso}</div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <span style={{ fontSize: 12, color: stage.color, fontWeight: 600 }}>{formatPeso(lead.valor)}</span>
@@ -51,6 +53,14 @@ export default function KanbanBoard({
                   <div style={{ marginTop: 8, fontSize: 10, color: "#666", borderTop: "1px solid #222", paddingTop: 6, lineHeight: 1.4 }}>
                     {lead.notas.slice(0, 50)}{lead.notas.length > 50 ? "…" : ""}
                   </div>
+                )}
+                {hasConversation(lead) && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); goToConversation(lead); }}
+                    style={{ marginTop: 8, width: "100%", background: "#e8f5e9", border: "1px solid #25D36633", borderRadius: 6, color: "#128C7E", fontSize: 10, fontWeight: 600, padding: "5px 0", cursor: "pointer", letterSpacing: 0.5 }}
+                  >
+                    💬 Ver conversación
+                  </button>
                 )}
               </div>
             ))}

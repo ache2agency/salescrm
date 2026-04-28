@@ -1,11 +1,22 @@
 import { NextResponse } from 'next/server'
 import twilio from 'twilio'
+import { createServiceRoleClient } from '@/utils/supabase/server'
+import {
+  getMetaConfig,
+  getTwilioConfig,
+  getWhatsAppProvider,
+  normalizePhoneNumber,
+  sendMetaWhatsAppMessage,
+} from '@/lib/whatsapp/provider'
 
 export async function POST(request: Request) {
   try {
-    const { to, body } = (await request.json()) as {
+    const { to, body, leadId, agentUserId, fase } = (await request.json()) as {
       to?: string
       body?: string
+      leadId?: string
+      agentUserId?: string
+      fase?: string
     }
 
     if (!to || !body) {
@@ -15,9 +26,77 @@ export async function POST(request: Request) {
       )
     }
 
-    const accountSid = process.env.TWILIO_ACCOUNT_SID
-    const authToken = process.env.TWILIO_AUTH_TOKEN
-    const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER
+    const provider = getWhatsAppProvider()
+
+    const normalizedTo = normalizePhoneNumber(to)
+
+    if (provider === 'meta') {
+      const message = await sendMetaWhatsAppMessage({ to, body })
+
+      if (leadId) {
+        const supabase = await createServiceRoleClient()
+        const now = new Date().toISOString()
+        const { data: existingConv } = await supabase
+          .from('whatsapp_conversaciones')
+          .select('id')
+          .eq('whatsapp', normalizedTo)
+          .order('ultimo_mensaje_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        let conversacionId = existingConv?.id || null
+
+        if (!conversacionId) {
+          const { data: createdConv } = await supabase
+            .from('whatsapp_conversaciones')
+            .insert([
+              {
+                whatsapp: normalizedTo,
+                lead_id: leadId,
+                estado: 'abierta',
+                ultimo_mensaje_at: now,
+                fase: fase || 'seguimiento',
+                modo_humano: true,
+                tomado_por: agentUserId || null,
+              },
+            ])
+            .select('id')
+            .single()
+          conversacionId = createdConv?.id || null
+        } else {
+          await supabase
+            .from('whatsapp_conversaciones')
+            .update({
+              lead_id: leadId,
+              estado: 'abierta',
+              ultimo_mensaje_at: now,
+              fase: fase || 'seguimiento',
+              modo_humano: true,
+              tomado_por: agentUserId || null,
+            })
+            .eq('id', conversacionId)
+        }
+
+        if (conversacionId) {
+          await supabase.from('whatsapp_mensajes').insert([
+            {
+              conversacion_id: conversacionId,
+              rol: 'agente',
+              contenido: body,
+            },
+          ])
+        }
+      }
+
+      return NextResponse.json({
+        provider,
+        id: message.id,
+        to: normalizedTo,
+        status: 'accepted',
+      })
+    }
+
+    const { accountSid, authToken, fromNumber } = getTwilioConfig()
 
     if (!accountSid || !authToken || !fromNumber) {
       return NextResponse.json(
@@ -30,11 +109,13 @@ export async function POST(request: Request) {
 
     const from =
       fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`
+    const toFormatted = `whatsapp:${normalizedTo}`
 
-    // Normalizar número: quitar prefijo whatsapp:, asegurar E.164 (+ al inicio)
-    let num = to.replace(/^whatsapp:/i, '').trim()
-    if (num && !num.startsWith('+')) num = `+${num}`
-    const toFormatted = `whatsapp:${num}`
+    console.log('[send] Twilio attempt', {
+      accountSid: accountSid?.slice(0, 8) + '…',
+      from,
+      to: toFormatted,
+    })
 
     const message = await client.messages.create({
       from,
@@ -42,7 +123,63 @@ export async function POST(request: Request) {
       body,
     })
 
+    if (leadId) {
+      const supabase = await createServiceRoleClient()
+      const now = new Date().toISOString()
+      const { data: existingConv } = await supabase
+        .from('whatsapp_conversaciones')
+        .select('id')
+        .eq('whatsapp', normalizedTo)
+        .order('ultimo_mensaje_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      let conversacionId = existingConv?.id || null
+
+      if (!conversacionId) {
+        const { data: createdConv } = await supabase
+          .from('whatsapp_conversaciones')
+          .insert([
+            {
+              whatsapp: normalizedTo,
+              lead_id: leadId,
+              estado: 'abierta',
+              ultimo_mensaje_at: now,
+              fase: fase || 'seguimiento',
+              modo_humano: true,
+              tomado_por: agentUserId || null,
+            },
+          ])
+          .select('id')
+          .single()
+        conversacionId = createdConv?.id || null
+      } else {
+        await supabase
+          .from('whatsapp_conversaciones')
+          .update({
+            lead_id: leadId,
+            estado: 'abierta',
+            ultimo_mensaje_at: now,
+            fase: fase || 'seguimiento',
+            modo_humano: true,
+            tomado_por: agentUserId || null,
+          })
+          .eq('id', conversacionId)
+      }
+
+      if (conversacionId) {
+        await supabase.from('whatsapp_mensajes').insert([
+          {
+            conversacion_id: conversacionId,
+            rol: 'agente',
+            contenido: body,
+          },
+        ])
+      }
+    }
+
     return NextResponse.json({
+      provider,
       sid: message.sid,
       status: message.status,
       to: message.to,
@@ -51,25 +188,44 @@ export async function POST(request: Request) {
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
     const detail = e instanceof Error ? e.message : String(e)
+    const twilioCode = (e as { code?: number })?.code
+    const provider = getWhatsAppProvider()
+    console.error('[send] Error', { code: twilioCode, msg })
+
+    if (provider === 'meta') {
+      const { phoneNumberId, accessToken } = getMetaConfig()
+      if (!phoneNumberId || !accessToken) {
+        return NextResponse.json(
+          {
+            error: 'Faltan variables de entorno de Meta',
+            detail:
+              'Define META_WHATSAPP_ACCESS_TOKEN y META_WHATSAPP_PHONE_NUMBER_ID para enviar mensajes con WhatsApp Cloud API.',
+          },
+          { status: 500 }
+        )
+      }
+    }
 
     // Guía clara cuando Twilio rechaza el número "From" (configuración WhatsApp)
     if (
       /from address|could not find.*channel|invalid.*from/i.test(msg) ||
-      (typeof (e as { code?: number })?.code === 'number' && [21211, 21608].includes((e as { code: number }).code))
+      (typeof (e as { code?: number })?.code === 'number' && [21211, 21608, 63007].includes((e as { code: number }).code))
     ) {
+      const { fromNumber } = getTwilioConfig()
       return NextResponse.json(
         {
-          error: 'Número "From" de WhatsApp no válido en Twilio',
-          detail: `Revisa TWILIO_WHATSAPP_NUMBER en .env.local. Debe ser exactamente el número del sandbox de WhatsApp (Twilio Console → Messaging → Try it out → Send a WhatsApp message). Formato: +14155238886 (sin espacios, con +). Error: ${detail}`,
+          error: 'El número de WhatsApp no puede enviar mensajes salientes vía API',
+          detail: `El número ${fromNumber} recibe mensajes (webhook/TwiML) pero no está habilitado como WhatsApp Business sender en Twilio para envíos salientes. Ve a Twilio Console → Messaging → Senders → WhatsApp y verifica que ${fromNumber} aparezca como sender aprobado. Si solo usas el Sandbox, el "From" debe ser +14155238886. Error original: ${detail}`,
+          from: fromNumber,
+          action: 'Verifica en Twilio Console → Messaging → Senders → WhatsApp',
         },
         { status: 500 }
       )
     }
 
     return NextResponse.json(
-      { error: 'Error enviando mensaje de WhatsApp', detail },
+      { error: 'Error enviando mensaje de WhatsApp', detail, code: twilioCode ?? null },
       { status: 500 }
     )
   }
 }
-

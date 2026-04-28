@@ -216,7 +216,8 @@ async function notifyAsesor(
   evento: NotifyEvent,
   leadNombre: string | null | undefined,
   leadWhatsapp: string | null | undefined,
-  leadPrograma: string | null | undefined
+  leadPrograma: string | null | undefined,
+  primerMensaje?: string | null
 ) {
   try {
     // 1. Registrar en lead_activities (visible en CRM)
@@ -257,6 +258,7 @@ async function notifyAsesor(
       leadNombre ? `👤 ${leadNombre}` : null,
       leadPrograma ? `📚 ${leadPrograma}` : null,
       leadWhatsapp ? `📱 ${leadWhatsapp}` : null,
+      primerMensaje ? `💬 "${primerMensaje}"` : null,
     ].filter(Boolean).join('\n')
 
     const provider = getWhatsAppProvider()
@@ -412,12 +414,26 @@ async function parseIncomingWhatsAppMessage(
         : null
 
     const message = Array.isArray(value?.messages) ? value?.messages?.[0] : null
-    if (!message || message.type !== 'text' || !message.text?.body || !message.from) {
-      return null
-    }
+    if (!message || !message.from) return null
 
     const profileName = value?.contacts?.[0]?.profile?.name || ''
     const normalizedFrom = normalizePhoneNumber(message.from)
+
+    if (message.type !== 'text' || !message.text?.body) {
+      // Mensajes multimedia (audio, imagen, video, sticker, etc.)
+      const mediaTypes = ['audio', 'image', 'video', 'sticker', 'document', 'voice']
+      if (mediaTypes.includes(message.type || '')) {
+        return {
+          provider: 'meta',
+          body: '__MEDIA__',
+          from: normalizedFrom,
+          waNumber: normalizedFrom,
+          profileName,
+          rawPayload: payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {},
+        }
+      }
+      return null
+    }
 
     return {
       provider: 'meta',
@@ -437,11 +453,12 @@ async function parseIncomingWhatsAppMessage(
   const from = (formData.get('From') as string | null) ?? ''
   const waId = (formData.get('WaId') as string | null) ?? ''
   const profileName = (formData.get('ProfileName') as string | null) ?? ''
+  const numMedia = parseInt((formData.get('NumMedia') as string | null) ?? '0', 10)
   const normalizedFrom = normalizePhoneNumber(waId || from || '')
 
   return {
     provider: 'twilio',
-    body,
+    body: numMedia > 0 && !body.trim() ? '__MEDIA__' : body,
     from: normalizePhoneNumber(from),
     waNumber: normalizedFrom,
     profileName,
@@ -552,11 +569,11 @@ Modalidad: Presencial | Duración: 3 años
 
 *💰 Inversión:*
 • Inscripción semestral: $2,150 (incluye credencial)
-• Mensualidad: $2,650
+• Mensualidad: $2,750
 
 *🎉 Promoción del mes:*
 • Inscripción: ~$2,150~ → $645 (70% de descuento)
-• Mensualidad: ~$2,650~ → $1,855 (30% de descuento)
+• Mensualidad: ~$2,750~ → $1,925 (30% de descuento)
 
 *💼 Campo laboral:* Docente, traductor, asesor editorial, call centers, centros de investigación y organismos internacionales.
 
@@ -569,11 +586,11 @@ Modalidad: Online | Duración: 3 años
 
 *💰 Inversión:*
 • Inscripción semestral: $2,150 (incluye credencial)
-• Mensualidad: $2,650
+• Mensualidad: $2,750
 
 *🎉 Promoción del mes:*
 • Inscripción: ~$2,150~ → $645 (70% de descuento)
-• Mensualidad: ~$2,650~ → $1,855 (30% de descuento)
+• Mensualidad: ~$2,750~ → $1,925 (30% de descuento)
 
 *💼 Campo laboral:* Docente, traductor, asesor editorial, call centers, centros de investigación y organismos internacionales.
 
@@ -588,11 +605,11 @@ Modalidad: Presencial | Duración: 3 años
 
 *💰 Inversión:*
 • Inscripción semestral: $2,200 (incluye credencial)
-• Mensualidad: $2,650
+• Mensualidad: $2,750
 
 *🎉 Promoción del mes:*
 • Inscripción: ~$2,200~ → $660 (70% de descuento)
-• Mensualidad: ~$2,650~ → $1,855 (30% de descuento)
+• Mensualidad: ~$2,750~ → $1,925 (30% de descuento)
 
 *💼 Campo laboral:* Agencias de viajes, hoteles, resorts, operadores turísticos, eventos y convenciones.
 
@@ -605,11 +622,11 @@ Modalidad: Online | Duración: 3 años
 
 *💰 Inversión:*
 • Inscripción semestral: $2,200 (incluye credencial)
-• Mensualidad: $2,650
+• Mensualidad: $2,750
 
 *🎉 Promoción del mes:*
 • Inscripción: ~$2,200~ → $660 (70% de descuento)
-• Mensualidad: ~$2,650~ → $1,855 (30% de descuento)
+• Mensualidad: ~$2,750~ → $1,925 (30% de descuento)
 
 *💼 Campo laboral:* Agencias de viajes, hoteles, resorts, operadores turísticos, eventos y convenciones.
 
@@ -671,6 +688,26 @@ Modalidad: Presencial | Duración: 2 años
 • Mensualidad: ~$1,800~ → $1,440 (20% de descuento)
 
 📄 Más información: https://drive.google.com/file/d/1txVAaLEpi-WPTybWtSKKMu3mn6fC5TkK/view`,
+}
+
+const VALOR_POR_PROGRAMA: Record<string, number> = {
+  'Inglés para adultos': 990,
+  'Inglés para niños': 780,
+  'Licenciatura en Inglés': 1925,
+  'Licenciatura en Inglés online': 1925,
+  'Psicología': 1925,
+  'Relaciones públicas y mercadotecnia': 1925,
+  'Relaciones públicas y mercadotecnia online': 1925,
+  'Administración turística': 1925,
+  'Administración turística online': 1925,
+  'Bachillerato': 1440,
+  'Francés': 990,
+  'Italiano': 990,
+}
+
+function getValorPrograma(programa: string | null | undefined): number | null {
+  if (!programa) return null
+  return VALOR_POR_PROGRAMA[programa] ?? null
 }
 
 /** Programas de idiomas (Track A): después del info van a examen de ubicación */
@@ -1340,7 +1377,7 @@ export async function POST(request: Request) {
             }
             // Notificar al asesor del nuevo lead
             await notifyAsesor(supabase, leadId, 'nuevo_lead',
-              insertedLead?.nombre, whatsappValue, insertedLead?.curso)
+              insertedLead?.nombre, whatsappValue, insertedLead?.curso, originalText)
           }
         }
 
@@ -1472,6 +1509,16 @@ export async function POST(request: Request) {
       return provider === 'meta'
         ? Response.json({ ok: true, humanMode: true })
         : new Response('', { status: 200 })
+    }
+
+    // Mensaje multimedia (audio, imagen, video, etc.) — no podemos procesarlo
+    if (originalText === '__MEDIA__') {
+      const audioMsg = 'Lo sentimos, por el momento no podemos procesar notas de voz ni archivos multimedia. Por favor escríbenos tu mensaje en texto y con gusto te atendemos. 😊'
+      if (conversacionIdOuter) {
+        const supabase = createServiceRoleClient()
+        await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, audioMsg)
+      }
+      return buildProviderResponse(provider, audioMsg, waNumber)
     }
 
     // Intentar aplicar flow de reglas (keyword-based) antes de la lógica fija/RAG
@@ -1627,7 +1674,7 @@ export async function POST(request: Request) {
 
         if (programaIngles) {
           if (leadId) {
-            await supabase.from('leads').update({ curso: programaIngles }).eq('id', leadId)
+            await supabase.from('leads').update({ curso: programaIngles, ...(getValorPrograma(programaIngles) ? { valor: getValorPrograma(programaIngles) } : {}) }).eq('id', leadId)
             leadSnapshot = { ...leadSnapshot, curso: programaIngles } as LeadSnapshot
           }
           const ackIngles = `¡Excelente elección! 😊 Para contarte todo sobre *${programaIngles}*, ¿me compartes tu correo electrónico para darte seguimiento personalizado? 📧`
@@ -1646,7 +1693,7 @@ export async function POST(request: Request) {
         const programaDetectado = detectarPrograma(originalText)
         if (programaDetectado) {
           if (leadId) {
-            await supabase.from('leads').update({ curso: programaDetectado }).eq('id', leadId)
+            await supabase.from('leads').update({ curso: programaDetectado, ...(getValorPrograma(programaDetectado) ? { valor: getValorPrograma(programaDetectado) } : {}) }).eq('id', leadId)
             leadSnapshot = { ...leadSnapshot, curso: programaDetectado } as LeadSnapshot
           }
           const correoMsg = `¡Excelente elección! 😊 Para contarte todo sobre *${programaDetectado}*, ¿me compartes tu correo electrónico para darte seguimiento personalizado? 📧`
@@ -1835,7 +1882,7 @@ export async function POST(request: Request) {
             programaActualPC !== ''
           ) {
             if (leadId) {
-              await supabase.from('leads').update({ curso: programaNuevoPC }).eq('id', leadId)
+              await supabase.from('leads').update({ curso: programaNuevoPC, ...(getValorPrograma(programaNuevoPC) ? { valor: getValorPrograma(programaNuevoPC) } : {}) }).eq('id', leadId)
               leadSnapshot = { ...leadSnapshot, curso: programaNuevoPC } as LeadSnapshot
             }
             // Usar INFO_MSG hardcodeado si existe; fallback a RAG+GPT
@@ -1935,6 +1982,19 @@ export async function POST(request: Request) {
         history: convHistory,
       })
 
+      // Escalación por malentendidos consecutivos (3 turnos de bot sin avance de fase)
+      const botTurnsInHistory = convHistory.filter(m => m.role === 'assistant').length
+      if (botTurnsInHistory >= 3 && gpt.siguienteFase === phase && !gpt.requestedHuman && !gpt.noInterest) {
+        const escalMsg = 'Parece que no te he podido ayudar bien por aquí. 😊 Déjame conectarte con uno de nuestros asesores que podrá orientarte mejor. ¡En breve te contactan!'
+        await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, escalMsg)
+        await supabase.from('whatsapp_conversaciones').update({ modo_humano: true }).eq('id', conversacionIdOuter)
+        if (leadId) {
+          await notifyAsesor(supabase, leadId, 'lead_pide_humano',
+            leadSnapshot?.nombre, waNumber, leadSnapshot?.curso)
+        }
+        return buildProviderResponse(provider, escalMsg, waNumber)
+      }
+
       // Persistir datos capturados por GPT
       if (gpt.nombre && leadId && !hasLeadName(leadSnapshot?.nombre, waNumber)) {
         await supabase.from('leads').update({ nombre: gpt.nombre, stage: 'contactado' }).eq('id', leadId)
@@ -1943,7 +2003,7 @@ export async function POST(request: Request) {
         await supabase.from('leads').update({ email: gpt.email }).eq('id', leadId)
       }
       if (gpt.programa && leadId) {
-        await supabase.from('leads').update({ curso: gpt.programa }).eq('id', leadId)
+        await supabase.from('leads').update({ curso: gpt.programa, ...(getValorPrograma(gpt.programa) ? { valor: getValorPrograma(gpt.programa) } : {}) }).eq('id', leadId)
       }
 
       // Actualizar stage del lead según la fase destino
@@ -1973,7 +2033,7 @@ export async function POST(request: Request) {
         }
         // Si el usuario ya nombró un programa específico sin ambigüedad, saltar catálogo e ir a correo
         if (gpt.programa && leadId) {
-          await supabase.from('leads').update({ curso: gpt.programa }).eq('id', leadId)
+          await supabase.from('leads').update({ curso: gpt.programa, ...(getValorPrograma(gpt.programa) ? { valor: getValorPrograma(gpt.programa) } : {}) }).eq('id', leadId)
           const correoMsg = gpt.respuesta || `¡Perfecto! Para contarte todo sobre ${gpt.programa}, ¿me compartes tu correo para darte seguimiento personalizado?`
           await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, correoMsg, 'correo')
           return buildProviderResponse(provider, correoMsg, waNumber)
@@ -2079,9 +2139,30 @@ export async function POST(request: Request) {
 
     return buildProviderResponse(provider, `Hola. Soy el asistente de ${BOT_SIGNATURE}. ¿En qué puedo ayudarte?`, waNumber)
   } catch (e) {
-    // Log para depurar en Vercel (Functions → Logs)
     console.error('[webhook whatsapp]', e)
-    // Devolver un mensaje en lugar de 200 vacío, así el usuario recibe algo y Twilio no reintenta
+    // Notificar al admin por WhatsApp del error
+    try {
+      const supabase = createServiceRoleClient()
+      const { data: admins } = await supabase.from('profiles').select('whatsapp').eq('rol', 'admin')
+      const errMsg = `⚠️ *Error en webhook Windsor*\n${e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200)}\n🕐 ${new Date().toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })}`
+      const provider = getWhatsAppProvider()
+      for (const admin of (admins || [])) {
+        const phone = admin.whatsapp as string | null
+        if (!phone) continue
+        if (provider === 'meta') {
+          await sendMetaWhatsAppMessage({ to: phone, body: errMsg }).catch(() => {})
+        } else {
+          const sid = process.env.TWILIO_ACCOUNT_SID; const tok = process.env.TWILIO_AUTH_TOKEN; const from = process.env.TWILIO_WHATSAPP_FROM
+          if (sid && tok && from) {
+            await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: `Basic ${Buffer.from(`${sid}:${tok}`).toString('base64')}` },
+              body: new URLSearchParams({ From: `whatsapp:${from}`, To: `whatsapp:${phone}`, Body: errMsg }).toString(),
+            }).catch(() => {})
+          }
+        }
+      }
+    } catch {}
     const fallback = 'Disculpa, tuvimos un detalle momentáneo. Escríbeme de nuevo y con gusto te respondo.'
     return buildProviderResponse(getWhatsAppProvider(), fallback, '')
   }

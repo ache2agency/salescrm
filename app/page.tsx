@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/utils/supabase/server'
 import CRM from './crm'
+import SignoutButton from '@/components/SignoutButton'
 
 export default async function Home() {
   const supabase = await createClient()
@@ -18,13 +19,14 @@ export default async function Home() {
   const nombre = metadata.nombre || user.email?.split('@')[0] || 'Usuario'
 
   return (
-    <div>
+    <div style={{ display:"flex", flexDirection:"column", height:"100vh", overflow:"hidden" }}>
       <div style={{
         padding:20,
         borderBottom:"1px solid #eee",
         display:"flex",
         justifyContent:"space-between",
         alignItems:"center",
+        flexShrink:0,
       }}>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           <span>Bienvenido {user.email}</span>
@@ -42,12 +44,12 @@ export default async function Home() {
           )}
         </div>
 
-        <form action="/auth/signout" method="post">
-          <button type="submit">Cerrar sesión</button>
-        </form>
+        <SignoutButton />
       </div>
 
-      <CRM />
+      <div style={{ flex:1, minHeight:0, overflow:"hidden", display:"flex", flexDirection:"column" }}>
+        <CRM />
+      </div>
     </div>
   )
 }

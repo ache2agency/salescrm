@@ -1,6 +1,186 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 
+const RESPUESTAS_RAPIDAS = [
+  { grupo: "Idiomas", items: [
+    { label: "Inglés adultos", texto: `¡Excelente elección! 😊 Te comparto la información de nuestro Curso de Inglés:
+
+*📚 Curso de Inglés para Adultos*
+Dirigido a personas de 13 años en adelante
+
+*🎓 Modalidad:* Presencial y Online
+
+*🕐 Horarios presenciales:*
+• Matutino: 10:00 - 12:00 hrs
+• Vespertino: 17:00 - 19:00 hrs
+• Sabatino: 09:00 - 13:00 hrs
+
+*🛜 Horarios online:*
+• Vespertino: 17:00 - 19:00 hrs
+• Sabatino: 09:00 - 13:00 hrs
+
+*⏳ Duración:* 5 meses (10 meses sabatino)
+
+*💰 Inversión:*
+• Inscripción: $750
+• Mensualidad desde $990
+
+*🎉 Promoción del mes:*
+• Inscripción: ~$750~ → $375 (50% de descuento)
+• ¡Primer mes gratis!
+
+Al terminar obtienes un Diploma con validez oficial.
+
+¿Cómo te gustaría continuar?
+*A)* Tengo dudas 🤔
+*B)* Agendar mi examen de ubicación gratuito 📝` },
+    { label: "Inglés niños", texto: `¡Qué gran decisión para el futuro de tu hij@! 😊 Te comparto la información de nuestro Curso de Inglés para Niños:
+
+*📚 Curso de Inglés para Niños*
+Dirigido a niños de 4 a 12 años
+
+*🎓 Modalidad:* Presencial y Online
+
+*🕐 Horarios presenciales:*
+• Martes a jueves: 13:00 - 14:00 hrs o 17:00 - 18:00 hrs
+• Sabatino: 09:00 - 13:00 hrs
+
+*🛜 Horarios online:*
+• Lunes a jueves: 17:00 - 18:00 hrs
+• Sabatino: 09:00 - 13:00 hrs
+
+*⏳ Duración:* 5 meses
+
+*💰 Inversión:*
+• Inscripción: $800
+• Mensualidad: $780
+
+*🎉 Promoción del mes:*
+• Inscripción: ~$800~ → $400 (50% de descuento)
+• ¡Primer mes gratis!
+
+Al terminar obtiene un Diploma con validez oficial.
+
+¿Cómo te gustaría continuar?
+*A)* Tengo dudas 🤔
+*B)* Agendar mi examen de ubicación gratuito 📝` },
+  ]},
+  { grupo: "Licenciaturas", items: [
+    { label: "Lic. en Inglés", texto: `¡Excelente elección! 😊 Te comparto la información de nuestra Licenciatura en Inglés:
+
+*🎓 Licenciatura en Inglés*
+Modalidad: Presencial | Duración: 3 años
+
+*🕐 Horarios:* Matutino, Vespertino y Sabatino
+
+*💰 Inversión:*
+• Inscripción semestral: $2,150 (incluye credencial)
+• Mensualidad: $2,750
+
+*🎉 Promoción del mes:*
+• Inscripción: ~$2,150~ → $645 (70% de descuento)
+• Mensualidad: ~$2,750~ → $1,925 (30% de descuento)
+
+*💼 Campo laboral:* Docente, traductor, asesor editorial, call centers, centros de investigación y organismos internacionales.
+
+📄 Plan de estudios: https://drive.google.com/file/d/1M_K1sIqh-8LgZdTsiAmIRMOkVIiTw295/view
+
+¿Cómo te gustaría continuar?
+*A)* Tengo dudas 🤔
+*B)* Quiero inscribirme ✍️` },
+    { label: "Psicología", texto: `¡Excelente elección! 😊 Te comparto la información de nuestra Licenciatura en Psicología:
+
+*🎓 Licenciatura en Psicología*
+Modalidad: Presencial | Duración: 3 años
+
+*🕐 Horarios:* Matutino y Sabatino
+
+*💰 Inversión:*
+• Inscripción semestral: $2,300 (incluye credencial)
+• Mensualidad: $2,750
+
+*🎉 Promoción del mes:*
+• Inscripción: ~$2,300~ → $690 (70% de descuento)
+• Mensualidad: ~$2,750~ → $1,925 (30% de descuento)
+
+*💼 Campo laboral:* Salud, educación, medio ambiente, producción, consumo y convivencia social.
+
+📄 Plan de estudios: https://drive.google.com/file/d/1mw16jhbwN3K2dBy3ajcb3qREOPVXZ9rb/view
+
+¿Cómo te gustaría continuar?
+*A)* Tengo dudas 🤔
+*B)* Quiero inscribirme ✍️` },
+    { label: "RR.PP. y Mercadotecnia", texto: `¡Excelente elección! 😊 Te comparto la información de nuestra Licenciatura en Relaciones Públicas y Mercadotecnia:
+
+*🎓 Licenciatura en Relaciones Públicas y Mercadotecnia*
+Modalidad: Presencial | Duración: 3 años
+
+*🕐 Horarios:* Matutino, Vespertino y Sabatino
+
+*💰 Inversión:*
+• Inscripción semestral: $2,300 (incluye credencial)
+• Mensualidad: $2,750
+
+*🎉 Promoción del mes:*
+• Inscripción: ~$2,300~ → $690 (70% de descuento)
+• Mensualidad: ~$2,750~ → $1,925 (30% de descuento)
+
+*✨ Incluye 3 certificaciones:* Marketing digital, creación de páginas web y diseño gráfico.
+
+*💼 Campo laboral:* Agencias de publicidad, marketing, medios de comunicación, gobierno, tecnología, entretenimiento.
+
+📄 Plan de estudios: https://drive.google.com/file/d/1tv2023m30ZVHJRryfwhNm6tT9wICHvnZ/view
+
+¿Cómo te gustaría continuar?
+*A)* Tengo dudas 🤔
+*B)* Quiero inscribirme ✍️` },
+    { label: "Adm. Turística", texto: `¡Excelente elección! 😊 Te comparto la información de nuestra Licenciatura en Administración Turística:
+
+*🎓 Licenciatura en Administración Turística*
+Modalidad: Presencial | Duración: 3 años
+
+*🕐 Horarios:* Matutino, Vespertino y Sabatino
+
+*💰 Inversión:*
+• Inscripción semestral: $2,200 (incluye credencial)
+• Mensualidad: $2,750
+
+*🎉 Promoción del mes:*
+• Inscripción: ~$2,200~ → $660 (70% de descuento)
+• Mensualidad: ~$2,750~ → $1,925 (30% de descuento)
+
+*💼 Campo laboral:* Agencias de viajes, hoteles, resorts, operadores turísticos, eventos y convenciones.
+
+📄 Plan de estudios: https://drive.google.com/file/d/1FMFbZ4pupnqkD_X1pBUcxlVo0HmRxUPb/view
+
+¿Cómo te gustaría continuar?
+*A)* Tengo dudas 🤔
+*B)* Quiero inscribirme ✍️` },
+  ]},
+  { grupo: "Bachillerato", items: [
+    { label: "Bachillerato", texto: `¡Excelente elección! 😊 Te comparto la información de nuestra Prepa Windsor:
+
+*🎓 Bachillerato — Prepa Windsor*
+Modalidad: Presencial | Duración: 2 años
+
+*🕐 Horarios:* Matutino y Vespertino
+
+*💰 Inversión:*
+• Inscripción cuatrimestral: $1,100 (incluye credencial)
+• Mensualidad: $1,800
+
+*🎉 Promoción del mes:*
+• Inscripción: ~$1,100~ → $550 (50% de descuento)
+• Mensualidad: ~$1,800~ → $1,440 (20% de descuento)
+
+📄 Más información: https://drive.google.com/file/d/1txVAaLEpi-WPTybWtSKKMu3mn6fC5TkK/view
+
+¿Cómo te gustaría continuar?
+*A)* Tengo dudas 🤔
+*B)* Quiero inscribirme ✍️` },
+  ]},
+];
+
 const WA_GREEN = "#075E54";
 const WA_TEAL = "#128C7E";
 const WA_BUBBLE_OUT = "#DCF8C6";
@@ -49,8 +229,14 @@ export default function ConversationsPanel({
   agentMessage,
   sendAgentReply,
   sendingAgent,
+  closeLead,
 }) {
   const [mobileView, setMobileView] = useState("list");
+  const [showCerrarModal, setShowCerrarModal] = useState(false);
+  const [cerrarStage, setCerrarStage] = useState("inscrito");
+  const [cerrarMotivo, setCerrarMotivo] = useState("");
+  const [cerrando, setCerrando] = useState(false);
+  const [showRR, setShowRR] = useState(false);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -79,16 +265,17 @@ export default function ConversationsPanel({
     <>
       <style>{`
         .wa-root {
-          display: grid;
-          grid-template-columns: 360px 1fr;
-          height: calc(100vh - 172px);
+          display: flex;
+          flex-direction: row;
+          flex: 1;
+          min-height: 0;
           border-radius: 10px;
           overflow: hidden;
           box-shadow: 0 2px 12px rgba(0,0,0,0.12);
         }
 
         /* LIST */
-        .wa-list { display: flex; flex-direction: column; background: #fff; border-right: 1px solid #e9edef; }
+        .wa-list { width: 360px; flex-shrink: 0; display: flex; flex-direction: column; background: #fff; border-right: 1px solid #e9edef; min-height: 0; }
         .wa-list-header { background: ${WA_GREEN}; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; }
         .wa-list-title { color: #fff; font-size: 17px; font-weight: 700; }
         .wa-search { padding: 8px 12px; background: #f0f2f5; }
@@ -110,7 +297,7 @@ export default function ConversationsPanel({
         .wa-badge { font-size: 10px; border-radius: 999px; padding: 1px 7px; font-weight: 600; flex-shrink: 0; }
 
         /* CHAT */
-        .wa-chat { display: flex; flex-direction: column; background: ${WA_BG}; position: relative; min-height: 0; overflow: hidden; }
+        .wa-chat { flex: 1; display: flex; flex-direction: column; background: ${WA_BG}; position: relative; min-height: 0; overflow: hidden; }
         .wa-chat-header { background: ${WA_GREEN}; padding: 10px 16px; display: flex; align-items: center; gap: 10px; flex-shrink: 0; z-index: 1; }
         .wa-back-btn { background: none; border: none; color: #fff; font-size: 22px; cursor: pointer; padding: 0; display: none; line-height: 1; }
         .wa-chat-header-info { flex: 1; min-width: 0; }
@@ -150,7 +337,7 @@ export default function ConversationsPanel({
 
         /* mobile */
         @media (max-width: 768px) {
-          .wa-root { grid-template-columns: 1fr; height: calc(100vh - 172px); }
+          .wa-root { flex-direction: column; }
           .wa-list { display: ${mobileView === "list" ? "flex" : "none"}; }
           .wa-chat { display: ${mobileView === "chat" ? "flex" : "none"}; }
           .wa-back-btn { display: block !important; }
@@ -158,6 +345,48 @@ export default function ConversationsPanel({
           .wa-msg { max-width: 85%; }
         }
       `}</style>
+
+      {showCerrarModal && selectedConvLead && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 9000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: 24, width: "100%", maxWidth: 400, boxShadow: "0 16px 40px rgba(0,0,0,0.2)" }}>
+            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>Cerrar lead: {selectedConvLead.nombre || selectedConv.whatsapp}</div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+              <button
+                style={{ flex: 1, padding: "10px 0", borderRadius: 8, border: "2px solid", borderColor: cerrarStage === "inscrito" ? "#15803d" : "#e2e8f0", background: cerrarStage === "inscrito" ? "#dcfce7" : "#fff", color: cerrarStage === "inscrito" ? "#15803d" : "#555", fontWeight: 600, cursor: "pointer", fontSize: 13 }}
+                onClick={() => setCerrarStage("inscrito")}
+              >✅ Inscrito</button>
+              <button
+                style={{ flex: 1, padding: "10px 0", borderRadius: 8, border: "2px solid", borderColor: cerrarStage === "perdido" ? "#A8263C" : "#e2e8f0", background: cerrarStage === "perdido" ? "#fee2e8" : "#fff", color: cerrarStage === "perdido" ? "#A8263C" : "#555", fontWeight: 600, cursor: "pointer", fontSize: 13 }}
+                onClick={() => setCerrarStage("perdido")}
+              >❌ Perdido</button>
+            </div>
+            <textarea
+              value={cerrarMotivo}
+              onChange={e => setCerrarMotivo(e.target.value)}
+              placeholder={cerrarStage === "inscrito" ? "Notas de cierre (opcional)..." : "Motivo de pérdida (opcional)..."}
+              rows={3}
+              style={{ width: "100%", borderRadius: 8, border: "1px solid #e2e8f0", padding: "10px 12px", fontSize: 13, resize: "none", outline: "none", boxSizing: "border-box", fontFamily: "inherit" }}
+            />
+            <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+              <button
+                style={{ flex: 1, padding: "10px 0", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", color: "#555", cursor: "pointer", fontSize: 13 }}
+                onClick={() => setShowCerrarModal(false)}
+              >Cancelar</button>
+              <button
+                disabled={cerrando}
+                style={{ flex: 1, padding: "10px 0", borderRadius: 8, border: "none", background: cerrarStage === "inscrito" ? "#15803d" : "#A8263C", color: "#fff", fontWeight: 700, cursor: cerrando ? "default" : "pointer", fontSize: 13, opacity: cerrando ? 0.6 : 1 }}
+                onClick={async () => {
+                  if (!closeLead || !selectedConvLead?.id) return;
+                  setCerrando(true);
+                  await closeLead(selectedConvLead.id, cerrarStage, cerrarMotivo);
+                  setCerrando(false);
+                  setShowCerrarModal(false);
+                }}
+              >{cerrando ? "Guardando..." : "Confirmar"}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="wa-root">
 
@@ -267,6 +496,13 @@ export default function ConversationsPanel({
                   >
                     BOT
                   </button>
+                  <button
+                    className="wa-ctrl-btn"
+                    style={{ background: "#E8A838", color: "#fff" }}
+                    onClick={() => { setCerrarStage("inscrito"); setCerrarMotivo(""); setShowCerrarModal(true); }}
+                  >
+                    Cerrar
+                  </button>
                 </div>
               </div>
 
@@ -306,7 +542,34 @@ export default function ConversationsPanel({
                 <div ref={messagesEndRef} />
               </div>
 
+              {showRR && (
+                <div style={{ background: "#fff", borderTop: "1px solid #e9edef", maxHeight: 300, overflowY: "auto" }}>
+                  {RESPUESTAS_RAPIDAS.map((grupo) => (
+                    <div key={grupo.grupo}>
+                      <div style={{ fontSize: 10, color: "#888", letterSpacing: 1, padding: "8px 14px 4px", fontWeight: 600, textTransform: "uppercase" }}>{grupo.grupo}</div>
+                      {grupo.items.map((item) => (
+                        <button
+                          key={item.label}
+                          onClick={() => { setAgentMessage(item.texto); setShowRR(false); }}
+                          style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 14px", background: "none", border: "none", borderBottom: "1px solid #f0f0f0", cursor: "pointer", fontSize: 13, color: "#111" }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = "#f5f5f5"}
+                          onMouseLeave={(e) => e.currentTarget.style.background = "none"}
+                        >
+                          ⚡ {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="wa-input-bar">
+                <button
+                  onClick={() => setShowRR(v => !v)}
+                  title="Respuestas rápidas"
+                  style={{ background: showRR ? "#E8A838" : "#f0f2f5", border: "none", borderRadius: 20, width: 36, height: 36, cursor: "pointer", fontSize: 16, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
+                >
+                  ⚡
+                </button>
                 <textarea
                   value={agentMessage}
                   onChange={(e) => setAgentMessage(e.target.value)}

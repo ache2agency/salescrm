@@ -1,15 +1,44 @@
 "use client";
+import { useState } from "react";
+
+const PROGRAMAS = [
+  { group: "Inglés", options: ["Inglés para adultos", "Inglés para niños", "Francés", "Italiano"] },
+  { group: "Licenciaturas", options: ["Licenciatura en Inglés", "Relaciones públicas y mercadotecnia", "Administración turística", "Psicología"] },
+  { group: "Maestrías", options: ["Maestría en Innovación empresarial", "Maestría en Multiculturalidad y Plurilingüismo"] },
+  { group: "Bachillerato", options: ["Bachillerato"] },
+  { group: "Diplomados", options: [
+    "Administración de Instituciones de la Salud", "Administración de recursos humanos",
+    "Administración de restaurantes", "Análisis y Evaluación de Políticas Públicas",
+    "Comunicación y Liderazgo en el Sector Público", "Comunicación y Liderazgo empresarial",
+    "Competencias educativas", "Comunicación y Gobierno Digital", "Contabilidad",
+    "Creación y dirección de franquicias", "Ciencias del deporte", "Enfermería",
+    "Epidemiología", "Equidad de género y diversidad sexual", "Farmacología",
+    "Gamificación educativa", "Gerontología", "Innovación y Gobierno Digital",
+    "Mindfulness", "Nutrición deportiva", "Nutrición y Dietética",
+    "Políticas y Procesos de Participación Ciudadana", "Psicología criminológica",
+    "Psicología educativa", "Realidad Virtual", "Salud pública", "Tecnología educativa",
+    "Terapia ocupacional", "Tanatología", "Enseñanza del idioma inglés",
+    "Enseñanza del idioma español",
+  ]},
+];
 
 export default function NewLeadModal({
   showForm,
   setShowForm,
   newLead,
   setNewLead,
-  CURSOS,
   vendedores,
   addLead,
 }) {
+  const [saving, setSaving] = useState(false);
   if (!showForm) return null;
+
+  const handleAdd = async () => {
+    if (saving) return;
+    setSaving(true);
+    await addLead();
+    setSaving(false);
+  };
 
   return (
     <div className="modal-overlay" onClick={() => setShowForm(false)}>
@@ -19,7 +48,7 @@ export default function NewLeadModal({
           <div style={{ display: "grid", gap: 14 }}>
             {[
               { label: "NOMBRE *", key: "nombre", placeholder: "Nombre completo" },
-              { label: "EMAIL *", key: "email", placeholder: "correo@email.com" },
+              { label: "EMAIL", key: "email", placeholder: "correo@email.com" },
               { label: "WHATSAPP", key: "whatsapp", placeholder: "+52 55 XXXX XXXX" },
               { label: "VALOR ESTIMADO ($)", key: "valor", placeholder: "0" },
             ].map((f) => (
@@ -34,9 +63,13 @@ export default function NewLeadModal({
               </div>
             ))}
             <div>
-              <div style={{ fontSize: 10, color: "#555", letterSpacing: 1.5, marginBottom: 6 }}>CURSO INTERESADO</div>
+              <div style={{ fontSize: 10, color: "#555", letterSpacing: 1.5, marginBottom: 6 }}>PROGRAMA INTERESADO</div>
               <select className="select" value={newLead.curso} onChange={(e) => setNewLead((p) => ({ ...p, curso: e.target.value }))}>
-                {CURSOS.map((c) => <option key={c}>{c}</option>)}
+                {PROGRAMAS.map((g) => (
+                  <optgroup key={g.group} label={g.group}>
+                    {g.options.map((o) => <option key={o} value={o}>{o}</option>)}
+                  </optgroup>
+                ))}
               </select>
             </div>
             <div>
@@ -55,7 +88,7 @@ export default function NewLeadModal({
           </div>
           <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
             <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => setShowForm(false)}>Cancelar</button>
-            <button className="btn btn-primary" style={{ flex: 2 }} onClick={addLead}>AGREGAR LEAD →</button>
+            <button className="btn btn-primary" style={{ flex: 2 }} onClick={handleAdd} disabled={saving}>{saving ? "GUARDANDO..." : "AGREGAR LEAD →"}</button>
           </div>
         </div>
       </div>

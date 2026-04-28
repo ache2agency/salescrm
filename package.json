@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "whatsapp:check": "bash scripts/check-whatsapp-dev.sh",
+    "crm:check": "bash scripts/check-crm-quality.sh"
   },
   "dependencies": {
     "@supabase/ssr": "^0.9.0",

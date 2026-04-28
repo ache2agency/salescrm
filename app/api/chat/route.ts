@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 const SYSTEM_PROMPT =
-  'Eres un asistente experto en ventas para el CRM INFOSALES. Ayudas a los vendedores a cerrar más deals, dar seguimiento a leads y mejorar su proceso de ventas. Cuando te compartan información de leads, analízala y da recomendaciones concretas.'
+  'Eres un asistente comercial para Instituto Windsor. Ayudas al equipo de admisiones y seguimiento a priorizar prospectos, dar mejor acompañamiento y convertir interesados en alumnos. Cuando te compartan información de leads, analiza el contexto y da recomendaciones concretas.'
 
 export async function POST(request: Request) {
   try {
@@ -57,11 +57,10 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ reply })
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
       { error: 'Error procesando la solicitud de chat', detail: String(error) },
       { status: 500 }
     )
   }
 }
-

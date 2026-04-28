@@ -6,12 +6,12 @@ const DIAS_ENVIO = [1, 7, 14, 21, 28, 35, 42]
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev'
 
 function placeholderAsunto(dia: number, nombre: string) {
-  return `INFOSALES – Día ${dia}${nombre ? ` – Hola ${nombre}` : ''}`
+  return `Instituto Windsor – Seguimiento día ${dia}${nombre ? ` – Hola ${nombre}` : ''}`
 }
 
 function placeholderContenido(dia: number, nombre: string) {
   const saludo = nombre ? `Hola ${nombre},` : 'Hola,'
-  return `${saludo}\n\nEste es el día ${dia} de tu secuencia con INFOSALES.\n\n(Contenido placeholder – personalizar después.)\n\nSaludos,\nEquipo INFOSALES`
+  return `${saludo}\n\nEste es el día ${dia} de tu secuencia de seguimiento con Instituto Windsor.\n\n(Contenido placeholder – personalizar después.)\n\nSaludos,\nEquipo Instituto Windsor`
 }
 
 export async function POST(request: Request) {

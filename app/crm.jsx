@@ -32,6 +32,7 @@ const LEGACY_STAGE_MAP = {
 };
 
 const CURSOS = ["Inglés para niños", "Inglés para adultos", "Licenciaturas", "Maestrías", "Diplomados"];
+const SESSION_HOURS = 12;
 const formatPeso = (v) => `$${Number(v).toLocaleString("es-MX")}`;
 
 const WA_TEMPLATES = {
@@ -157,6 +158,7 @@ export default function CRM() {
     nextStep: "Pedir nombre",
   });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showAyuda, setShowAyuda] = useState(false);
 
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
@@ -407,7 +409,18 @@ export default function CRM() {
 
   const loadUser = async () => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) {
+      window.location.href = '/login';
+      return;
+    }
+
+    const loginAt = localStorage.getItem('windsor_login_at');
+    const expired = !loginAt || (Date.now() - parseInt(loginAt, 10)) > SESSION_HOURS * 3600 * 1000;
+    if (expired) {
+      await supabase.auth.signOut();
+      window.location.href = '/login';
+      return;
+    }
     setCurrentUser(user);
 
     // Cargar o crear perfil
@@ -429,6 +442,7 @@ export default function CRM() {
 
     fetchLeads(user.id, profile?.rol === "admin");
     fetchCitas(user.id, profile?.rol === "admin");
+    fetchWhatsConvs();
   };
 
   const fetchLeads = async (userId, admin) => {
@@ -738,6 +752,19 @@ export default function CRM() {
     showToast(enabled ? "Ahora la conversación está en modo HUMANO" : "La conversación volvió al BOT");
   };
 
+  const closeLead = async (leadId, stage, motivo) => {
+    if (!leadId) return;
+    const { error } = await supabase.from("leads").update({ stage }).eq("id", leadId);
+    if (error) { showToast("Error cerrando lead", "error"); return; }
+    await logLeadActivity({ leadId, eventType: "stage_changed", title: stage === "inscrito" ? "Lead inscrito" : "Lead perdido", detail: motivo || "" });
+    // Cerrar conversación si hay una abierta
+    if (selectedConv) {
+      await supabase.from("whatsapp_conversaciones").update({ estado: "cerrada", fase: stage === "inscrito" ? "cerrado" : "perdido" }).eq("id", selectedConv.id);
+    }
+    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, stage } : l));
+    showToast(stage === "inscrito" ? "Lead marcado como inscrito" : "Lead marcado como perdido");
+  };
+
   /** Si estamos en una conv en modo humano y el usuario va a salir, pide confirmar. Aceptar = pasar a BOT y ejecutar callback; Cancelar = no hacer nada. */
   const confirmReturnToBotIfNeeded = async (thenDo) => {
     if (view !== "convs" || !selectedConv?.modo_humano) {
@@ -902,6 +929,10 @@ export default function CRM() {
   };
 
   const filteredLeads = leads.filter(l => {
+    // Asesores solo ven sus propios leads
+    if (!isAdmin && currentProfile?.id) {
+      if (l.asignado_a !== currentProfile.id) return false;
+    }
     const matchV = filterVendedor === "Todos" || l.asignado_a === filterVendedor;
     const matchS = (l.nombre || l.whatsapp || '').toLowerCase().includes(search.toLowerCase()) || (l.email || '').toLowerCase().includes(search.toLowerCase());
     return matchV && matchS;
@@ -909,6 +940,11 @@ export default function CRM() {
 
   const conversationPhaseOptions = ["todas", ...Array.from(new Set(whatsConvs.map((c) => c.fase).filter(Boolean)))];
   const filteredWhatsConvs = whatsConvs.filter((conv) => {
+    // Asesores solo ven conversaciones de sus leads
+    if (!isAdmin && currentProfile?.id) {
+      const lead = leads.find((l) => l.id === conv.lead_id);
+      if (lead && lead.asignado_a !== currentProfile.id) return false;
+    }
     const searchValue = convSearch.trim().toLowerCase();
     const matchesSearch =
       !searchValue ||
@@ -1064,7 +1100,7 @@ export default function CRM() {
   };
 
   const addLead = async () => {
-    if (!newLead.nombre || !newLead.email) return showToast("Nombre y email son requeridos", "error");
+    if (!newLead.nombre) return showToast("El nombre es requerido", "error");
     const lead = {
       ...newLead,
       stage: "primer_contacto",
@@ -1089,8 +1125,9 @@ export default function CRM() {
   };
 
   const deleteLead = async (id) => {
-    const { error } = await supabase.from("leads").delete().eq("id", id);
-    if (error) return showToast("Error eliminando", "error");
+    const { error, data } = await supabase.from("leads").delete().eq("id", id).select();
+    if (error) return showToast("Error eliminando: " + error.message, "error");
+    if (!data || data.length === 0) return showToast("Sin permiso para eliminar este lead", "error");
     setLeads(prev => prev.filter(l => l.id !== id));
     setSelectedLead(null);
     showToast("Lead eliminado");
@@ -1099,6 +1136,14 @@ export default function CRM() {
   const updateNotas = async (id, notas) => {
     await supabase.from("leads").update({ notas }).eq("id", id);
     setLeads(prev => prev.map(l => l.id === id ? { ...l, notas } : l));
+  };
+
+  const updateLeadField = async (id, field, value) => {
+    const { error, data } = await supabase.from("leads").update({ [field]: value }).eq("id", id).select();
+    if (error) return showToast("Error guardando: " + error.message, "error");
+    if (!data || data.length === 0) return showToast("Sin permiso para editar este lead", "error");
+    setLeads(prev => prev.map(l => l.id === id ? { ...l, [field]: value } : l));
+    showToast("Guardado ✓");
   };
 
   const reasignarLead = async (leadId, nuevoAsignadoId) => {
@@ -1375,7 +1420,7 @@ export default function CRM() {
   };
 
   return (
-    <div style={{ fontFamily: "'DM Mono', 'Courier New', monospace", background: "#f5f7fa", minHeight: "100vh", color: "#1a1a1a" }}>
+    <div style={{ fontFamily: "'DM Mono', 'Courier New', monospace", background: "#f5f7fa", flex: 1, minHeight: 0, display: "flex", flexDirection: "column", color: "#1a1a1a" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Bebas+Neue&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1397,9 +1442,9 @@ export default function CRM() {
         .select { appearance: none; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; color: #1a1a1a; font-family: inherit; font-size: 13px; padding: 8px 12px; width: 100%; outline: none; cursor: pointer; }
         .select:focus { border-color: #2C4A8C; }
         .tag { display: inline-block; border-radius: 4px; font-size: 10px; font-weight: 500; padding: 2px 7px; letter-spacing: 0.5px; }
-        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9000; display: flex; align-items: center; justify-content: center; padding: 20px; }
         .modal { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; max-width: 520px; width: 100%; max-height: 90vh; overflow-y: auto; }
-        .toast { position: fixed; bottom: 24px; right: 24px; z-index: 999; padding: 12px 20px; border-radius: 8px; font-size: 13px; animation: slideUp 0.3s ease; }
+        .toast { position: fixed; bottom: 24px; right: 24px; z-index: 9999; padding: 12px 20px; border-radius: 8px; font-size: 13px; animation: slideUp 0.3s ease; }
         @keyframes slideUp { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform: translateY(0); } }
         .col-drop { min-height: 80px; border-radius: 6px; transition: background 0.2s; }
         .col-drop.drag-over { background: rgba(200,16,46,0.05); border: 1px dashed #A8263C; }
@@ -1436,7 +1481,7 @@ export default function CRM() {
       `}</style>
 
       {/* HEADER */}
-      <div style={{ borderBottom: "1px solid rgba(255,255,255,0.15)", padding: "0 24px", position: "sticky", top: 0, zIndex: 300, background: "#2C4A8C", overflow: "visible" }}>
+      <div style={{ borderBottom: "1px solid rgba(255,255,255,0.15)", padding: "0 24px", position: "sticky", top: 0, zIndex: 300, background: "#2C4A8C", overflow: "visible", flexShrink: 0 }}>
         <div style={{ maxWidth: 1400, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 60 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <span className="crm-title" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, letterSpacing: 3, color: "#ffffff" }}>WINDSOR CRM</span>
@@ -1466,6 +1511,7 @@ export default function CRM() {
           {/* Desktop user */}
           <div className="desktop-user" style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <span style={{ fontSize: 11, color: "#555" }}>{currentProfile?.email || currentUser?.email}</span>
+            <button className="btn btn-ghost" style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", border: "1px solid rgba(255,255,255,0.25)" }} onClick={() => setShowAyuda(true)}>? Ayuda</button>
             <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ NUEVO LEAD</button>
           </div>
 
@@ -1508,8 +1554,7 @@ export default function CRM() {
         )}
       </div>
 
-      {view === "convs" && <style>{`html, body { overflow: hidden; }`}</style>}
-      <div style={{ maxWidth: 1400, margin: "0 auto", padding: "24px" }}>
+      <div style={{ maxWidth: 1400, margin: "0 auto", padding: "24px", flex: 1, minHeight: 0, display: view === "convs" ? "flex" : "block", flexDirection: "column", overflowY: view === "convs" ? "hidden" : "auto" }}>
         {/* STATS */}
         <div className="stat-card-grid" style={{ display: view === "convs" ? "none" : "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
           {[
@@ -1535,7 +1580,27 @@ export default function CRM() {
               {vendedores.map(v => <option key={v.id} value={v.id}>{v.nombre || v.email}</option>)}
             </select>
           )}
-          <div style={{ marginLeft: "auto", fontSize: 12, color: "#555" }}>{filteredLeads.length} leads mostrados</div>
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ fontSize: 12, color: "#555" }}>{filteredLeads.length} leads mostrados</span>
+            <button className="btn btn-ghost" style={{ fontSize: 11 }} onClick={() => {
+              const headers = ["Nombre","Email","WhatsApp","Programa","Stage","Fecha","Valor","Notas"];
+              const rows = filteredLeads.map(l => [
+                l.nombre||"", l.email||"", l.whatsapp||"", l.curso||"",
+                normalizeStage(l.stage)||"", l.fecha||"", l.valor||"", (l.notas||"").replace(/\n/g," ")
+              ]);
+              const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
+              const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a"); a.href = url; a.download = `leads_${new Date().toISOString().slice(0,10)}.csv`; a.click(); URL.revokeObjectURL(url);
+            }}>⬇ CSV</button>
+            {isAdmin && (
+              <button className="btn btn-ghost" style={{ fontSize: 11 }} onClick={async () => {
+                const { error } = await supabase.from("leads").update({ stage: "primer_contacto" }).is("stage", null);
+                if (error) { showToast("Error moviendo leads", "error"); return; }
+                await fetchLeads(); showToast("Leads sin stage movidos a Primer contacto");
+              }}>🔧 Fix huérfanos</button>
+            )}
+          </div>
         </div>
 
         {loading && <div className="loading">Cargando leads...</div>}
@@ -1551,6 +1616,17 @@ export default function CRM() {
             handleDrop={handleDrop}
             setSelectedLead={setSelectedLead}
             getNombreVendedor={getNombreVendedor}
+            goToConversation={(lead) => {
+              const conv = whatsConvs.find(c => c.lead_id === lead.id || c.whatsapp === lead.whatsapp);
+              fetchWhatsConvs().then(() => {
+                setView("convs");
+                if (conv) {
+                  setSelectedConv(conv);
+                  fetchConvMessages(conv.id);
+                }
+              });
+            }}
+            hasConversation={(lead) => whatsConvs.some(c => c.lead_id === lead.id || c.whatsapp === lead.whatsapp)}
           />
         )}
 
@@ -2042,6 +2118,7 @@ export default function CRM() {
             agentMessage={agentMessage}
             sendAgentReply={sendAgentReply}
             sendingAgent={sendingAgent}
+            closeLead={closeLead}
           />
         )}
 
@@ -2055,6 +2132,57 @@ export default function CRM() {
           />
         )}
       </div>
+
+      {/* MODAL AYUDA */}
+      {showAyuda && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 9000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={() => setShowAyuda(false)}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: 28, width: "100%", maxWidth: 520, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 22, letterSpacing: 2, color: "#2C4A8C" }}>GUÍA DEL ASESOR</div>
+              <button onClick={() => setShowAyuda(false)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#555" }}>✕</button>
+            </div>
+            {[
+              {
+                icon: "👤", title: "Tus leads",
+                body: "En KANBAN y LISTA solo verás los leads que te están asignados. Si no ves un lead, puede que esté asignado a otro asesor."
+              },
+              {
+                icon: "💬", title: "Cómo responder por WhatsApp",
+                body: "Ve a CONVERSACIONES. Selecciona un chat de la lista izquierda. Escribe tu mensaje en la caja de texto y presiona Enter o el botón de enviar. Solo puedes responder cuando la conversación está en modo HUMANO."
+              },
+              {
+                icon: "🤝", title: "Tomar una conversación",
+                body: "Clic en el botón TOMAR en el encabezado del chat. El bot dejará de responder automáticamente y podrás atender al prospecto directamente."
+              },
+              {
+                icon: "🤖", title: "Devolver al bot",
+                body: "Clic en BOT para que el asistente retome la conversación. Úsalo cuando el prospecto quede en modo de espera o ya no necesites atención directa."
+              },
+              {
+                icon: "✅", title: "Cerrar un lead",
+                body: "Clic en CERRAR (botón amarillo) en el chat → elige Inscrito o Perdido → escribe el motivo si aplica → presiona Confirmar. El lead se mueve automáticamente en el Kanban."
+              },
+              {
+                icon: "📋", title: "Registrar un nuevo lead manual",
+                body: "Clic en + NUEVO LEAD (botón rojo arriba a la derecha). Llena nombre, WhatsApp y programa. El lead aparece en tu Kanban en Primer contacto."
+              },
+              {
+                icon: "⚠️", title: "Si el bot no responde bien",
+                body: "Toma la conversación con TOMAR y atiende al prospecto directamente. Avisa al administrador para revisar la configuración del bot."
+              },
+            ].map((s, i) => (
+              <div key={i} style={{ display: "flex", gap: 12, marginBottom: 18, padding: "12px 14px", background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0" }}>
+                <div style={{ fontSize: 22, flexShrink: 0, marginTop: 1 }}>{s.icon}</div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4, color: "#1a1a1a" }}>{s.title}</div>
+                  <div style={{ fontSize: 12, color: "#555", lineHeight: 1.6 }}>{s.body}</div>
+                </div>
+              </div>
+            ))}
+            <div style={{ textAlign: "center", marginTop: 8, fontSize: 11, color: "#94a3b8" }}>Windsor CRM — Soporte: hola@windsor.edu.mx</div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL DETALLE LEAD */}
       {selectedLead && (() => {
@@ -2078,13 +2206,14 @@ export default function CRM() {
             sendingInfoLeadId={sendingInfoLeadId}
             leadInfoDraft={leadInfoDraft}
             setLeadInfoDraft={setLeadInfoDraft}
-            hasActiveConversation={!!whatsConvs.find((conv) => conv.lead_id === lead.id || conv.whatsapp === lead.whatsapp)}
+            activeConversation={whatsConvs.find((conv) => conv.lead_id === lead.id || conv.whatsapp === lead.whatsapp) || null}
             getLeadNextStep={getLeadNextStep}
             leadTimelineLoading={leadTimelineLoading}
             leadTimeline={leadTimeline}
             setShowCitaForm={setShowCitaForm}
             setNuevaCita={setNuevaCita}
             deleteLead={deleteLead}
+            updateLeadField={updateLeadField}
           />
         );
       })()}
@@ -2094,7 +2223,6 @@ export default function CRM() {
         setShowForm={setShowForm}
         newLead={newLead}
         setNewLead={setNewLead}
-        CURSOS={CURSOS}
         vendedores={vendedores}
         addLead={addLead}
       />

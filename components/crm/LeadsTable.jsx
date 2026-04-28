@@ -10,12 +10,12 @@ export default function LeadsTable({
   normalizeStage,
 }) {
   return (
-    <div style={{ background: "#161616", border: "1px solid #2a2a2a", borderRadius: 10, overflow: "hidden" }}>
+    <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 10, overflow: "hidden" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
         <thead>
-          <tr style={{ borderBottom: "1px solid #2a2a2a" }}>
+          <tr style={{ borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
             {["NOMBRE", "CURSO", "ETAPA", "VALOR", "ASIGNADO A", "FECHA", "ACCIONES"].map((h) => (
-              <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 10, color: "#555", letterSpacing: 1.5, fontWeight: 500 }}>{h}</th>
+              <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 10, color: "#94a3b8", letterSpacing: 1.5, fontWeight: 500 }}>{h}</th>
             ))}
           </tr>
         </thead>
@@ -25,22 +25,22 @@ export default function LeadsTable({
             return (
               <tr
                 key={lead.id}
-                style={{ borderBottom: "1px solid #1e1e1e", cursor: "pointer" }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "#1e1e1e"; }}
+                style={{ borderBottom: "1px solid #f1f5f9", cursor: "pointer" }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "#f8fafc"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
                 onClick={() => setSelectedLead(lead)}
               >
                 <td style={{ padding: "12px 16px" }}>
-                  <div style={{ fontWeight: 500, color: "#e8e8e8" }}>{lead.nombre}</div>
-                  <div style={{ fontSize: 11, color: "#555" }}>{lead.email}</div>
+                  <div style={{ fontWeight: 500, color: "#1e293b" }}>{lead.nombre || lead.whatsapp}</div>
+                  <div style={{ fontSize: 11, color: "#94a3b8" }}>{lead.email}</div>
                 </td>
-                <td style={{ padding: "12px 16px", color: "#aaa", fontSize: 12 }}>{lead.curso}</td>
+                <td style={{ padding: "12px 16px", color: "#64748b", fontSize: 12 }}>{lead.curso}</td>
                 <td style={{ padding: "12px 16px" }}>
                   <span className="tag" style={{ background: stage?.color + "22", color: stage?.color }}>{stage?.label}</span>
                 </td>
                 <td style={{ padding: "12px 16px", color: stage?.color, fontWeight: 600 }}>{formatPeso(lead.valor)}</td>
-                <td style={{ padding: "12px 16px", color: "#aaa", fontSize: 12 }}>{getNombreVendedor(lead.asignado_a)}</td>
-                <td style={{ padding: "12px 16px", color: "#555", fontSize: 11 }}>{lead.fecha}</td>
+                <td style={{ padding: "12px 16px", color: "#64748b", fontSize: 12 }}>{getNombreVendedor(lead.asignado_a)}</td>
+                <td style={{ padding: "12px 16px", color: "#94a3b8", fontSize: 11 }}>{lead.fecha}</td>
                 <td style={{ padding: "12px 16px" }} onClick={(e) => e.stopPropagation()}>
                   <button className="btn btn-wa" onClick={() => openWA(lead)}>WA</button>
                 </td>
