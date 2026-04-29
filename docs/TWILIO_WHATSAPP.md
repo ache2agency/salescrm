@@ -4,6 +4,35 @@ Si al enviar desde el panel CONVERSACIONES aparece **"Twilio could not find a Ch
 
 ## Pasos para corregirlo
 
+## Arranque diario recomendado
+
+Si al volver al proyecto "no avanza" el bot, casi siempre es una de estas 4 cosas:
+
+1. El servidor local no está corriendo realmente.
+2. Twilio sigue apuntando a una URL vieja del webhook.
+3. El número de tu teléfono ya no está unido al sandbox.
+4. Hay un proceso viejo ocupando el puerto `3000`.
+
+Antes de probar el bot, corre:
+
+```bash
+npm run whatsapp:check
+```
+
+Luego sigue esta secuencia:
+
+1. Asegúrate de que no haya un `next dev` viejo colgado en `3000`.
+2. Inicia el proyecto con `npm run dev`.
+3. Abre `http://localhost:3000/api/whatsapp/status`.
+   Debe responder que Twilio está configurado.
+4. Expón tu app con una URL pública si vas a probar local.
+   Ejemplo: un tunnel tipo ngrok, cloudflared o localtunnel.
+5. En Twilio Sandbox, revisa **When a message comes in**:
+   Debe apuntar a `POST https://TU_URL_PUBLICA/api/whatsapp/webhook`
+6. En tu teléfono, confirma que el sandbox siga activo:
+   si hace falta, vuelve a enviar el código `join ...` que Twilio muestra en la consola.
+7. Ahora sí manda el mensaje al número de prueba de Twilio.
+
 ### 1. Obtener el número correcto (Sandbox de WhatsApp)
 
 1. Entra a [Twilio Console](https://console.twilio.com).
