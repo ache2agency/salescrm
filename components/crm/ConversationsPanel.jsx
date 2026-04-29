@@ -232,6 +232,7 @@ export default function ConversationsPanel({
   closeLead,
 }) {
   const [mobileView, setMobileView] = useState("list");
+  const [showInfoCards, setShowInfoCards] = useState(false);
   const [showCerrarModal, setShowCerrarModal] = useState(false);
   const [cerrarStage, setCerrarStage] = useState("inscrito");
   const [cerrarMotivo, setCerrarMotivo] = useState("");
@@ -245,6 +246,7 @@ export default function ConversationsPanel({
 
   const handleSelectConv = async (c) => {
     if (c.id === selectedConv?.id) return;
+    setShowInfoCards(false);
     await confirmReturnToBotIfNeeded(async () => {
       setSelectedConv(c);
       await fetchConvMessages(c.id);
@@ -341,9 +343,12 @@ export default function ConversationsPanel({
           .wa-list { display: ${mobileView === "list" ? "flex" : "none"}; }
           .wa-chat { display: ${mobileView === "chat" ? "flex" : "none"}; }
           .wa-back-btn { display: block !important; }
-          .wa-info-cards { grid-template-columns: 1fr; }
+          .wa-info-cards { grid-template-columns: 1fr 1fr; display: ${showInfoCards ? "grid" : "none"}; padding: 6px 10px; gap: 6px; }
+          .wa-info-card { padding: 6px 8px; }
+          .wa-info-toggle { display: flex !important; }
           .wa-msg { max-width: 85%; }
         }
+        .wa-info-toggle { display: none; align-items: center; justify-content: center; padding: 3px 12px; background: #f0f2f5; border: none; cursor: pointer; font-size: 10px; color: #667781; letter-spacing: 0.5px; gap: 4px; flex-shrink: 0; }
       `}</style>
 
       {showCerrarModal && selectedConvLead && (
@@ -505,6 +510,10 @@ export default function ConversationsPanel({
                   </button>
                 </div>
               </div>
+
+              <button className="wa-info-toggle" onClick={() => setShowInfoCards(v => !v)}>
+                {showInfoCards ? "▲ Ocultar info" : "▼ Ver lead · " + (selectedConvLead?.nombre || selectedConv?.whatsapp || "")}
+              </button>
 
               <div className="wa-info-cards">
                 <div className="wa-info-card">

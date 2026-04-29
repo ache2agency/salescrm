@@ -20,7 +20,10 @@ export default async function Home() {
 
   return (
     <div style={{ display:"flex", flexDirection:"column", height:"100vh", overflow:"hidden" }}>
-      <div style={{
+      <style>{`
+        @media (max-width: 768px) { .top-user-bar { display: none !important; } }
+      `}</style>
+      <div className="top-user-bar" style={{
         padding:20,
         borderBottom:"1px solid #eee",
         display:"flex",
@@ -47,7 +50,7 @@ export default async function Home() {
         <SignoutButton />
       </div>
 
-      <div style={{ flex:1, minHeight:0, overflow:"hidden", display:"flex", flexDirection:"column" }}>
+      <div style={{ flex:1, minHeight:0, display:"flex", flexDirection:"column", overflow:"hidden" }}>
         <CRM />
       </div>
     </div>

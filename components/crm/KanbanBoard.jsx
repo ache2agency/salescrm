@@ -13,7 +13,7 @@ export default function KanbanBoard({
   hasConversation,
 }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: `repeat(${STAGES.length}, 1fr)`, gap: 14, overflowX: "auto" }}>
+    <div style={{ display: "flex", flexDirection: "row", gap: 14, overflowX: "auto", paddingBottom: 8, WebkitOverflowScrolling: "touch" }}>
       {STAGES.map((stage) => (
         <div
           key={stage.id}
@@ -21,7 +21,7 @@ export default function KanbanBoard({
           onDragLeave={(e) => e.currentTarget.classList.remove("drag-over")}
           onDrop={(e) => { e.currentTarget.classList.remove("drag-over"); handleDrop(stage.id); }}
           className="col-drop"
-          style={{ minWidth: 190 }}
+          style={{ minWidth: 220, flex: "0 0 220px" }}
         >
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, padding: "10px 12px", background: stage.bg, borderRadius: 8, border: `1px solid ${stage.color}22` }}>
             <div>
