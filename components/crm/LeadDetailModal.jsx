@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef } from "react";
 
 const PROGRAMAS = [
   { group: "Inglés", options: ["Inglés para adultos", "Inglés para niños", "Francés", "Italiano"] },
@@ -44,6 +44,9 @@ export default function LeadDetailModal({
   deleteLead,
 }) {
   const [editingInfo, setEditingInfo] = useState(false);
+  const [localNotas, setLocalNotas] = useState(lead.notas || "");
+  const [notasSaved, setNotasSaved] = useState(true);
+  const notasSaveTimer = useRef(null);
   const [draft, setDraft] = useState({
     nombre: lead.nombre || "",
     email: lead.email || "",
@@ -206,12 +209,35 @@ export default function LeadDetailModal({
           </div>
 
           <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 10, color: "#555", letterSpacing: 1, marginBottom: 8 }}>NOTAS</div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <div style={{ fontSize: 10, color: "#555", letterSpacing: 1 }}>NOTAS</div>
+              <div style={{ fontSize: 10, color: notasSaved ? "#27AE60" : "#E8A838" }}>
+                {notasSaved ? "✓ Guardado" : "Sin guardar…"}
+              </div>
+            </div>
             <textarea
               className="input"
               style={{ fontSize: 12, lineHeight: 1.5 }}
-              value={lead.notas || ""}
-              onChange={(e) => { updateNotas(lead.id, e.target.value); setSelectedLead({ ...lead, notas: e.target.value }); }}
+              value={localNotas}
+              onChange={(e) => {
+                const v = e.target.value;
+                setLocalNotas(v);
+                setNotasSaved(false);
+                clearTimeout(notasSaveTimer.current);
+                notasSaveTimer.current = setTimeout(async () => {
+                  await updateNotas(lead.id, v);
+                  setSelectedLead(prev => ({ ...prev, notas: v }));
+                  setNotasSaved(true);
+                }, 1200);
+              }}
+              onBlur={async () => {
+                if (!notasSaved) {
+                  clearTimeout(notasSaveTimer.current);
+                  await updateNotas(lead.id, localNotas);
+                  setSelectedLead(prev => ({ ...prev, notas: localNotas }));
+                  setNotasSaved(true);
+                }
+              }}
               placeholder="Agrega notas sobre este lead..."
             />
           </div>

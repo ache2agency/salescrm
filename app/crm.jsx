@@ -1065,8 +1065,9 @@ export default function CRM() {
   const moveStage = async (leadId, newStage) => {
     const lead = leads.find((item) => item.id === leadId);
     const previousStage = normalizeStage(lead?.stage);
-    const { error } = await supabase.from("leads").update({ stage: newStage }).eq("id", leadId);
-    if (error) return showToast("Error actualizando", "error");
+    const { data: updData, error } = await supabase.from("leads").update({ stage: newStage }).eq("id", leadId).select("id");
+    if (error) return showToast("Error actualizando: " + error.message, "error");
+    if (!updData || updData.length === 0) return showToast("Sin permiso para mover este lead", "error");
 
     const nextFase = getConversationPhaseForStage(newStage);
     if (nextFase) {
@@ -1137,7 +1138,9 @@ export default function CRM() {
   };
 
   const updateNotas = async (id, notas) => {
-    await supabase.from("leads").update({ notas }).eq("id", id);
+    const { data, error } = await supabase.from("leads").update({ notas }).eq("id", id).select("id");
+    if (error) { showToast("Error guardando notas: " + error.message, "error"); return; }
+    if (!data || data.length === 0) { showToast("Sin permiso para editar este lead", "error"); return; }
     setLeads(prev => prev.map(l => l.id === id ? { ...l, notas } : l));
   };
 
