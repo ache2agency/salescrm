@@ -35,6 +35,7 @@ type IncomingWhatsAppMessage = {
   from: string
   waNumber: string
   profileName: string
+  messageSid?: string
   rawPayload: Record<string, unknown>
 }
 
@@ -453,6 +454,7 @@ async function parseIncomingWhatsAppMessage(
   const from = (formData.get('From') as string | null) ?? ''
   const waId = (formData.get('WaId') as string | null) ?? ''
   const profileName = (formData.get('ProfileName') as string | null) ?? ''
+  const messageSid = (formData.get('MessageSid') as string | null) ?? undefined
   const numMedia = parseInt((formData.get('NumMedia') as string | null) ?? '0', 10)
   const normalizedFrom = normalizePhoneNumber(waId || from || '')
 
@@ -462,6 +464,7 @@ async function parseIncomingWhatsAppMessage(
     from: normalizePhoneNumber(from),
     waNumber: normalizedFrom,
     profileName,
+    messageSid,
     rawPayload: Object.fromEntries(formData.entries()),
   }
 }
@@ -1308,6 +1311,23 @@ export async function POST(request: Request) {
     const incoming = await parseIncomingWhatsAppMessage(request)
     if (!incoming) {
       return Response.json({ ok: true, ignored: true })
+    }
+
+    // Deduplicación por MessageSid de Twilio — evita procesar retries del webhook
+    if (incoming.messageSid) {
+      const supabaseDedup = createServiceRoleClient()
+      const { data: existing } = await supabaseDedup
+        .from('whatsapp_mensajes')
+        .select('id')
+        .eq('rol', 'usuario')
+        .contains('raw_payload', { MessageSid: incoming.messageSid })
+        .limit(1)
+        .maybeSingle()
+      if (existing?.id) {
+        return incoming.provider === 'twilio'
+          ? buildTwiml('')
+          : Response.json({ ok: true, deduplicated: true })
+      }
     }
 
     const provider = incoming.provider || getWhatsAppProvider()
