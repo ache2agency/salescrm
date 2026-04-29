@@ -1617,7 +1617,8 @@ export async function POST(request: Request) {
         const isGreeting = /^\s*(hola|hey|ola|buenas|buenos|buen[oa])\b/i.test(originalText.trim())
         const hasProgramKeyword = /ingl[eé]s|psicolog|turism|relaciones|bachillerato|maestr[ií]a|diplomado|administraci[oó]n|idiom|franc[eé]s|italian/i.test(originalText)
         const hasDigits = /\d/.test(originalText)
-        const looksLikeName = !isGreeting && !hasProgramKeyword && !hasDigits && !/@/.test(originalText) && words.length >= 1 && words.length <= 3
+        const hasQuestion = /\?/.test(originalText) || /^\s*(qu[eé]|c[oó]mo|cu[aá]ndo|cu[aá]nto|d[oó]nde|cu[aá]l|qui[eé]n|tienen?|hay|info|informaci[oó]n|cuanto|cuando|cual|quien|como|que)\b/i.test(originalText.trim())
+        const looksLikeName = !isGreeting && !hasProgramKeyword && !hasDigits && !hasQuestion && !/@/.test(originalText) && words.length >= 1 && words.length <= 3
 
         if (looksLikeName) {
           const nombreCapturado = originalText.trim()
@@ -1982,9 +1983,10 @@ export async function POST(request: Request) {
         history: convHistory,
       })
 
-      // Escalación por malentendidos consecutivos (3 turnos de bot sin avance de fase)
+      // Escalación por malentendidos consecutivos (5 turnos de bot sin avance de fase)
       const botTurnsInHistory = convHistory.filter(m => m.role === 'assistant').length
-      if (botTurnsInHistory >= 3 && gpt.siguienteFase === phase && !gpt.requestedHuman && !gpt.noInterest) {
+      const esMensajePositivo = /^\s*(s[ií]|claro|ok|okay|exacto|de acuerdo|perfecto|estoy interesado|me interesa|interesado|interesada|bien|buenas?\s+(tardes?|d[ií]as?|noches?)|hola|gracias|muchas gracias|genial|excelente|adelante|quiero|s[ií] quiero)\b/i.test(originalText.trim())
+      if (botTurnsInHistory >= 5 && gpt.siguienteFase === phase && !gpt.requestedHuman && !gpt.noInterest && !esMensajePositivo) {
         const escalMsg = 'Parece que no te he podido ayudar bien por aquí. 😊 Déjame conectarte con uno de nuestros asesores que podrá orientarte mejor. ¡En breve te contactan!'
         await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, escalMsg)
         await supabase.from('whatsapp_conversaciones').update({ modo_humano: true }).eq('id', conversacionIdOuter)

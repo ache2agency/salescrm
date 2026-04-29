@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/utils/supabase/client";
 import AgendaPanel from "@/components/crm/AgendaPanel";
 import ConversationsPanel from "@/components/crm/ConversationsPanel";
@@ -136,6 +136,7 @@ export default function CRM() {
   const [botSaving, setBotSaving] = useState(false);
   const [agentMessage, setAgentMessage] = useState("");
   const [sendingAgent, setSendingAgent] = useState(false);
+  const sendingAgentRef = useRef(false);
   const [sendingInfoLeadId, setSendingInfoLeadId] = useState(null);
   const [leadInfoDraft, setLeadInfoDraft] = useState("");
   const [labScenario, setLabScenario] = useState("ads");
@@ -778,7 +779,8 @@ export default function CRM() {
   };
 
   const sendAgentReply = async () => {
-    if (!selectedConv || !agentMessage.trim()) return;
+    if (!selectedConv || !agentMessage.trim() || sendingAgentRef.current) return;
+    sendingAgentRef.current = true;
     setSendingAgent(true);
     try {
       const res = await fetch("/api/whatsapp/send", {
@@ -841,6 +843,7 @@ export default function CRM() {
     } catch (e) {
       showToast(e?.message || "Error enviando mensaje de WhatsApp", "error");
     } finally {
+      sendingAgentRef.current = false;
       setSendingAgent(false);
     }
   };
