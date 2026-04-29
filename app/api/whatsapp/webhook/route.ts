@@ -1513,7 +1513,12 @@ export async function POST(request: Request) {
 
     // Mensaje multimedia (audio, imagen, video, etc.) — no podemos procesarlo
     if (originalText === '__MEDIA__') {
-      const audioMsg = 'Lo sentimos, por el momento no podemos procesar notas de voz ni archivos multimedia. Por favor escríbenos tu mensaje en texto y con gusto te atendemos. 😊'
+      const faseActual = currentFase
+      const contextHint =
+        faseActual === 'saludo' ? ' ¿Me puedes decir tu nombre?' :
+        faseActual === 'programa' ? ' ¿Qué programa te interesa?' :
+        faseActual === 'correo' ? ' ¿Me compartes tu correo electrónico?' : ''
+      const audioMsg = `Lo sentimos, por el momento no podemos procesar notas de voz ni archivos multimedia. Por favor escríbenos tu mensaje en texto y con gusto te atendemos. 😊${contextHint}`
       if (conversacionIdOuter) {
         const supabase = createServiceRoleClient()
         await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, audioMsg)
@@ -1658,7 +1663,7 @@ export async function POST(request: Request) {
         const msgLower0 = originalText.toLowerCase()
         if (/ingl[eé]s/i.test(msgLower0) && !/ni[ñn]o|adulto|licenciatura|lic\b/i.test(msgLower0)) {
           const disambig = `Tenemos tres opciones de inglés, ¿cuál te interesa?\n\nA) Inglés para adultos\nB) Inglés para niños\nC) Licenciatura en Inglés`
-          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, disambig, phase)
+          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, disambig, 'programa')
           return buildProviderResponse(provider, disambig, waNumber)
         }
       }
@@ -1723,9 +1728,7 @@ export async function POST(request: Request) {
         }
 
         // Caso 2: parece una carrera o programa específico que no ofrecemos
-        const palabras = msgTrimP.split(/\s+/).length
         const pareceCarreraEspecifica =
-          palabras >= 2 ||
           /m[eé]dic|enfermer|derecho|contadur|ingenier|arquitect|qu[ií]mic|biolog|nutric|odontolog|veterinar|farmac|f[ií]sica|matem|historia|filosof|geograf|econom|sociolog|antropolog|comunicaci[oó]n|periodis|artes?|diseño|música|danza|teatro|cine|fotograf/i.test(msgTrimP)
 
         if (pareceCarreraEspecifica) {
