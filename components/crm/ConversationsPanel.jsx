@@ -339,15 +339,20 @@ export default function ConversationsPanel({
 
         /* mobile */
         @media (max-width: 768px) {
-          .wa-root { flex-direction: column; width: 100%; max-width: 100%; border-radius: 0; }
-          .wa-list { display: ${mobileView === "list" ? "flex" : "none"}; width: 100%; max-width: 100%; }
-          .wa-chat { display: ${mobileView === "chat" ? "flex" : "none"}; width: 100%; max-width: 100%; }
-          .wa-back-btn { display: block !important; }
+          .wa-root { flex-direction: column; width: 100vw; max-width: 100vw; border-radius: 0; overflow: hidden; }
+          .wa-list { display: ${mobileView === "list" ? "flex" : "none"}; width: 100%; max-width: 100%; overflow-x: hidden; }
+          .wa-chat { display: ${mobileView === "chat" ? "flex" : "none"}; width: 100%; max-width: 100%; overflow-x: hidden; }
+          .wa-chat-header { padding: 8px 10px; gap: 6px; overflow: hidden; }
+          .wa-chat-actions { gap: 4px; }
+          .wa-ctrl-btn { padding: 4px 7px; font-size: 10px; }
+          .wa-back-btn { display: block !important; font-size: 18px; }
           .wa-info-cards { grid-template-columns: 1fr 1fr; display: ${showInfoCards ? "grid" : "none"}; padding: 6px 10px; gap: 6px; }
           .wa-info-card { padding: 6px 8px; }
           .wa-info-toggle { display: flex !important; }
-          .wa-msg { max-width: 85%; }
-          .wa-messages { padding: 8px; }
+          .wa-messages { padding: 8px; overflow-x: hidden; }
+          .wa-msg { max-width: 88%; overflow-wrap: anywhere; word-break: break-word; }
+          .wa-msg.in::before { display: none; }
+          .wa-msg.out::after { display: none; }
         }
         .wa-info-toggle { display: none; align-items: center; justify-content: center; padding: 3px 12px; background: #f0f2f5; border: none; cursor: pointer; font-size: 10px; color: #667781; letter-spacing: 0.5px; gap: 4px; flex-shrink: 0; }
       `}</style>

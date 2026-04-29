@@ -1477,6 +1477,7 @@ export default function CRM() {
           .lab-chat-panel { order: 1; min-height: 420px !important; }
           .lab-state-compact { display: flex; flex-wrap: wrap; gap: 8px 16px; }
           .lab-state-compact div { font-size: 11px; }
+          .kanban-wrapper { overflow-x: auto !important; -webkit-overflow-scrolling: touch; padding-bottom: 16px; }
         }
       `}</style>
 
@@ -1554,7 +1555,7 @@ export default function CRM() {
         )}
       </div>
 
-      <div style={{ maxWidth: view === "agenda" ? "none" : 1400, margin: "0 auto", padding: view === "agenda" ? "12px 16px" : view === "convs" ? "0" : "24px", flex: 1, minHeight: 0, display: (view === "convs" || view === "agenda") ? "flex" : "block", flexDirection: "column", overflowY: (view === "convs" || view === "agenda") ? "hidden" : "auto" }}>
+      <div className={view === "kanban" ? "kanban-wrapper" : ""} style={{ maxWidth: view === "agenda" ? "none" : 1400, margin: "0 auto", padding: view === "agenda" ? "12px 16px" : view === "convs" ? "0" : "24px", flex: 1, minHeight: 0, display: (view === "convs" || view === "agenda") ? "flex" : "block", flexDirection: "column", overflowY: (view === "convs" || view === "agenda") ? "hidden" : "auto" }}>
         {/* STATS */}
         <div className="stat-card-grid" style={{ display: (view === "convs" || view === "agenda") ? "none" : "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
           {[
