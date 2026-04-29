@@ -256,7 +256,7 @@ export default function LeadDetailModal({
                     <div style={{ minWidth: 0 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
                         <div style={{ fontSize: 12, color: "#e0e0e0", fontWeight: 500 }}>{item.title}</div>
-                        <div style={{ fontSize: 10, color: "#444", flexShrink: 0 }}>{String(item.date || "").replace("T", " ").slice(0, 16)}</div>
+                        <div style={{ fontSize: 10, color: "#444", flexShrink: 0 }}>{item.date ? new Date(item.date).toLocaleString("es-MX", { timeZone: "America/Mexico_City", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}</div>
                       </div>
                       {item.detail && (
                         <div style={{ fontSize: 11, color: "#666", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>

@@ -439,7 +439,7 @@ export default function ConversationsPanel({
                 const name = getDisplayName(c);
                 const owner = vendedores.find((v) => v.id === c.tomado_por);
                 const time = c.ultimo_mensaje_at
-                  ? new Date(c.ultimo_mensaje_at).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })
+                  ? new Date(c.ultimo_mensaje_at).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", timeZone: "America/Mexico_City" })
                   : "";
                 return (
                   <div
@@ -543,7 +543,7 @@ export default function ConversationsPanel({
                 ) : (
                   convMessages.map((m) => {
                     const isOut = m.rol === "bot" || m.rol === "agente";
-                    const time = m.created_at?.slice(11, 16) ?? "";
+                    const time = m.created_at ? new Date(m.created_at).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", timeZone: "America/Mexico_City" }) : "";
                     return (
                       <div key={m.id} className={`wa-msg ${isOut ? "out" : "in"}`}>
                         {m.rol === "agente" && <div className="wa-msg-role" style={{ color: "#A8263C" }}>Vendedor</div>}
