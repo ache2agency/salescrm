@@ -1134,8 +1134,11 @@ export default function CRM() {
         body: JSON.stringify({ lead_id: data[0].id }),
       }).then(async (res) => {
         if (res.ok) showToast("Mensaje de bienvenida enviado por WhatsApp ✓");
-        else showToast("Lead guardado, pero no se pudo enviar WhatsApp", "error");
-      }).catch(() => showToast("Lead guardado, pero no se pudo enviar WhatsApp", "error"));
+        else {
+          const err = await res.json().catch(() => ({}));
+          showToast("WhatsApp error: " + (err.error || res.status), "error");
+        }
+      }).catch((e) => showToast("WhatsApp fetch error: " + e.message, "error"));
     }
   };
 
