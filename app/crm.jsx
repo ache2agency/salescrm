@@ -1133,8 +1133,10 @@ export default function CRM() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ lead_id: data[0].id }),
       }).then(async (res) => {
-        if (res.ok) showToast("Mensaje de bienvenida enviado por WhatsApp ✓");
-        else {
+        if (res.ok) {
+          showToast("Mensaje de bienvenida enviado por WhatsApp ✓");
+          fetchWhatsConvs();
+        } else {
           const err = await res.json().catch(() => ({}));
           showToast("WhatsApp error: " + (err.error || res.status), "error");
         }
