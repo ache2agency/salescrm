@@ -13,7 +13,7 @@ export default function KanbanBoard({
   hasConversation,
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "row", gap: 14, overflowX: "auto", paddingBottom: 8, WebkitOverflowScrolling: "touch" }}>
+    <div style={{ display: "flex", flexDirection: "row", gap: 14, overflowX: "auto", paddingBottom: 8, WebkitOverflowScrolling: "touch", minWidth: "max-content" }}>
       {STAGES.map((stage) => (
         <div
           key={stage.id}

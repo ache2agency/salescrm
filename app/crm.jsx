@@ -1484,7 +1484,8 @@ export default function CRM() {
           .lab-chat-panel { order: 1; min-height: 420px !important; }
           .lab-state-compact { display: flex; flex-wrap: wrap; gap: 8px 16px; }
           .lab-state-compact div { font-size: 11px; }
-          .kanban-wrapper { overflow-x: auto !important; -webkit-overflow-scrolling: touch; padding-bottom: 16px; }
+          .kanban-wrapper { overflow-x: auto !important; -webkit-overflow-scrolling: touch; padding-bottom: 16px; padding-left: 8px !important; padding-right: 8px !important; max-width: 100vw !important; }
+          .kanban-wrapper > * { min-width: max-content; }
         }
       `}</style>
 
