@@ -38,6 +38,9 @@ export async function POST(request: Request) {
     }
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
+    if (msg.includes('133010')) {
+      return Response.json({ error: 'El número no tiene WhatsApp registrado' }, { status: 422 })
+    }
     return Response.json({ error: msg }, { status: 500 })
   }
 
