@@ -1127,6 +1127,16 @@ export default function CRM() {
     setShowForm(false);
     setNewLead({ nombre: "", email: "", whatsapp: "", curso: CURSOS[0], valor: "", notas: "", asignado_a: currentUser.id });
     showToast("Lead agregado ✓");
+    if (data[0].whatsapp) {
+      fetch("/api/whatsapp/bienvenida", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lead_id: data[0].id }),
+      }).then(async (res) => {
+        if (res.ok) showToast("Mensaje de bienvenida enviado por WhatsApp ✓");
+        else showToast("Lead guardado, pero no se pudo enviar WhatsApp", "error");
+      }).catch(() => showToast("Lead guardado, pero no se pudo enviar WhatsApp", "error"));
+    }
   };
 
   const deleteLead = async (id) => {
