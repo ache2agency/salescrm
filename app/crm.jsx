@@ -34,6 +34,7 @@ const LEGACY_STAGE_MAP = {
 const CURSOS = ["Inglés para niños", "Inglés para adultos", "Licenciaturas", "Maestrías", "Diplomados"];
 const SESSION_HOURS = 12;
 const formatPeso = (v) => `$${Number(v).toLocaleString("es-MX")}`;
+const todayCST = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Mexico_City" });
 
 const WA_TEMPLATES = {
   primer_contacto: (nombre, curso) => `Hola ${nombre}. Gracias por tu interés en *${curso}* en Instituto Windsor. Con gusto te orientamos sobre el siguiente paso.`,
@@ -1108,7 +1109,7 @@ export default function CRM() {
     const lead = {
       ...newLead,
       stage: "primer_contacto",
-      fecha: new Date().toISOString().slice(0, 10),
+      fecha: todayCST(),
       valor: Number(newLead.valor) || 0,
       user_id: currentUser.id,
       asignado_a: newLead.asignado_a || currentUser.id,
@@ -1568,7 +1569,7 @@ export default function CRM() {
             { label: "PIPELINE TOTAL", value: formatPeso(pipelineValue), sub: `${filteredLeads.filter((l) => !["inscrito","perdido","archivado"].includes(normalizeStage(l.stage))).length} leads activos`, color: "#4A90D9" },
             { label: "INSCRITOS", value: formatPeso(totalRevenue), sub: `${leads.filter((l) => normalizeStage(l.stage) === "inscrito").length} cierres`, color: "#27AE60" },
             { label: "TASA DE CIERRE", value: `${convRate}%`, sub: `de ${leads.length} leads totales`, color: "#E8A838" },
-            { label: "LEADS HOY", value: leads.filter(l => l.fecha === new Date().toISOString().slice(0,10)).length, sub: "nuevos ingresos", color: "#E85D38" },
+            { label: "LEADS HOY", value: leads.filter(l => l.fecha === todayCST()).length, sub: "nuevos ingresos", color: "#E85D38" },
           ].map((s, i) => (
             <div key={i} className="stat-card">
               <div style={{ fontSize: 10, color: "#555", letterSpacing: 2, marginBottom: 8 }}>{s.label}</div>
@@ -1598,7 +1599,7 @@ export default function CRM() {
               const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
               const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
               const url = URL.createObjectURL(blob);
-              const a = document.createElement("a"); a.href = url; a.download = `leads_${new Date().toISOString().slice(0,10)}.csv`; a.click(); URL.revokeObjectURL(url);
+              const a = document.createElement("a"); a.href = url; a.download = `leads_${todayCST()}.csv`; a.click(); URL.revokeObjectURL(url);
             }}>⬇ CSV</button>
             {isAdmin && (
               <button className="btn btn-ghost" style={{ fontSize: 11 }} onClick={async () => {

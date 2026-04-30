@@ -1357,7 +1357,7 @@ export async function POST(request: Request) {
         leadSnapshot = (existingLead as LeadSnapshot | null) || null
 
         if (!leadId) {
-          const today = new Date().toISOString().slice(0, 10)
+          const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' })
           const defaultAssignee = await getDefaultAssigneeId(supabase)
 
           const { data: insertedLead } = await supabase
