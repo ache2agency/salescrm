@@ -1104,10 +1104,23 @@ export default function CRM() {
     if (dragId) { moveStage(dragId, stageId); setDragId(null); }
   };
 
+  const normalizarWhatsapp = (num) => {
+    if (!num) return num;
+    let n = num.replace(/\s+/g, "").replace(/[^\d+]/g, "");
+    if (!n.startsWith("+")) {
+      const digits = n.replace(/\D/g, "");
+      if (digits.length === 10) n = `+52${digits}`;
+      else if (digits.length === 12 && digits.startsWith("52")) n = `+${digits}`;
+      else n = `+${digits}`;
+    }
+    return n;
+  };
+
   const addLead = async () => {
     if (!newLead.nombre) return showToast("El nombre es requerido", "error");
     const lead = {
       ...newLead,
+      whatsapp: normalizarWhatsapp(newLead.whatsapp),
       stage: "primer_contacto",
       fecha: todayCST(),
       valor: Number(newLead.valor) || 0,
