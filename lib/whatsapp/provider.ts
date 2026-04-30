@@ -7,6 +7,8 @@ export function getWhatsAppProvider(): WhatsAppProvider {
 export function normalizePhoneNumber(value: string) {
   let normalized = (value || '').replace(/^whatsapp:/i, '').trim()
   if (normalized && !normalized.startsWith('+')) normalized = `+${normalized}`
+  // Números mexicanos: +521XXXXXXXXXX → +52XXXXXXXXXX (quita el "1" extra heredado)
+  if (/^\+521\d{10}$/.test(normalized)) normalized = '+52' + normalized.slice(4)
   return normalized
 }
 
