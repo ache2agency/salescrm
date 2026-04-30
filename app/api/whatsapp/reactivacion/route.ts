@@ -89,8 +89,8 @@ async function enviarWhatsApp(
 
 function getTemplatePorEtapa(etapa: string, intento: number): string {
   if (etapa === 'inscripcion_pendiente') return 'windsor_inscripcion_pendiente'
-  if (intento === 2) return 'windsor_promocion_activa'
-  return 'windsor_seguimiento_general'
+  if (intento === 2) return 'windsor_promocion'
+  return 'seguimiento_general'
 }
 
 const HORAS_REACTIVACION_BOT = 20
@@ -160,7 +160,7 @@ async function reactivarConversacionesBot(
 
       const provider = (conv.provider as WhatsAppProvider | null) || defaultProvider
       try {
-        await enviarWhatsApp(conv.whatsapp, mensaje, provider, 'windsor_seguimiento_general', [nombre])
+        await enviarWhatsApp(conv.whatsapp, mensaje, provider, 'seguimiento_general', [nombre])
         await supabase.from('whatsapp_mensajes').insert([
           { conversacion_id: conv.id, rol: 'reactivacion', contenido: mensaje },
         ])
