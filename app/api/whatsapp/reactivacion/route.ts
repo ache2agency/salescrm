@@ -5,6 +5,7 @@ import {
   getWhatsAppProvider,
   normalizePhoneNumber,
   sendMetaWhatsAppMessage,
+  sendMetaWhatsAppTemplate,
   type WhatsAppProvider,
 } from '@/lib/whatsapp/provider'
 import {
@@ -62,11 +63,18 @@ function diasDesde(fecha: Date): number {
 async function enviarWhatsApp(
   to: string,
   body: string,
-  provider: WhatsAppProvider
+  provider: WhatsAppProvider,
+  templateName?: string,
+  templateParams?: string[]
 ): Promise<void> {
   const normalized = normalizePhoneNumber(to)
   if (provider === 'meta') {
-    await sendMetaWhatsAppMessage({ to: normalized, body })
+    // Usar template si está disponible (mensajes fuera de ventana 24h)
+    if (templateName && templateParams) {
+      await sendMetaWhatsAppTemplate({ to: normalized, templateName, parameters: templateParams })
+    } else {
+      await sendMetaWhatsAppMessage({ to: normalized, body })
+    }
     return
   }
   const { accountSid, authToken, fromNumber } = getTwilioConfig()
@@ -77,6 +85,12 @@ async function enviarWhatsApp(
   const from = fromNumber.startsWith('whatsapp:') ? fromNumber : `whatsapp:${fromNumber}`
   const toFormatted = `whatsapp:${normalized.replace(/^whatsapp:/i, '')}`
   await client.messages.create({ from, to: toFormatted, body })
+}
+
+function getTemplatePorEtapa(etapa: string, intento: number): string {
+  if (etapa === 'inscripcion_pendiente') return 'windsor_inscripcion_pendiente'
+  if (intento === 2) return 'windsor_promocion_activa'
+  return 'windsor_seguimiento_general'
 }
 
 const HORAS_REACTIVACION_BOT = 20
@@ -146,7 +160,7 @@ async function reactivarConversacionesBot(
 
       const provider = (conv.provider as WhatsAppProvider | null) || defaultProvider
       try {
-        await enviarWhatsApp(conv.whatsapp, mensaje, provider)
+        await enviarWhatsApp(conv.whatsapp, mensaje, provider, 'windsor_seguimiento_general', [nombre])
         await supabase.from('whatsapp_mensajes').insert([
           { conversacion_id: conv.id, rol: 'reactivacion', contenido: mensaje },
         ])
@@ -448,9 +462,10 @@ export async function POST(request: Request) {
 
     const provider = (conv.provider as WhatsAppProvider | null) || defaultProvider
     const to = conv.whatsapp || lead.whatsapp
+    const templateName = getTemplatePorEtapa(etapaCanon, siguienteIntento)
 
     try {
-      await enviarWhatsApp(to!, mensaje, provider)
+      await enviarWhatsApp(to!, mensaje, provider, templateName, [nombre])
 
       const now = new Date().toISOString()
       await supabase.from('reactivacion_intentos').insert([

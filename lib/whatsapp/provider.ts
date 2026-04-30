@@ -20,12 +20,61 @@ export function getTwilioConfig() {
 
 export function getMetaConfig() {
   return {
-    accessToken: process.env.META_WHATSAPP_ACCESS_TOKEN,
-    phoneNumberId: process.env.META_WHATSAPP_PHONE_NUMBER_ID,
+    accessToken: process.env.META_WHATSAPP_TOKEN || process.env.META_WHATSAPP_ACCESS_TOKEN,
+    phoneNumberId: process.env.META_PHONE_NUMBER_ID || process.env.META_WHATSAPP_PHONE_NUMBER_ID,
     businessAccountId: process.env.META_WHATSAPP_BUSINESS_ACCOUNT_ID,
     verifyToken: process.env.META_WHATSAPP_VERIFY_TOKEN,
     appSecret: process.env.META_APP_SECRET,
   }
+}
+
+export async function sendMetaWhatsAppTemplate({
+  to,
+  templateName,
+  parameters,
+}: {
+  to: string
+  templateName: string
+  parameters: string[]
+}) {
+  const { accessToken, phoneNumberId } = getMetaConfig()
+  if (!accessToken || !phoneNumberId) throw new Error('Faltan variables de entorno de Meta')
+
+  const toFormatted = normalizePhoneNumber(to).replace(/^\+/, '')
+
+  const response = await fetch(
+    `https://graph.facebook.com/v23.0/${phoneNumberId}/messages`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: toFormatted,
+        type: 'template',
+        template: {
+          name: templateName,
+          language: { code: 'es_MX' },
+          components: [
+            {
+              type: 'body',
+              parameters: parameters.map(v => ({ type: 'text', text: v })),
+            },
+          ],
+        },
+      }),
+    }
+  )
+
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    const detail = data?.error?.message || `HTTP ${response.status}`
+    throw new Error(detail)
+  }
+  return { id: data?.messages?.[0]?.id || null, raw: data }
 }
 
 export async function sendMetaWhatsAppMessage({
