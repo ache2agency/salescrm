@@ -1151,7 +1151,7 @@ export default function CRM() {
           fetchWhatsConvs();
         } else {
           const err = await res.json().catch(() => ({}));
-          showToast(err.error || "No se pudo enviar WhatsApp", "error");
+          showToast((err.error || "Error") + (err.numero_intentado ? ` → ${err.numero_intentado}` : ""), "error");
         }
       }).catch((e) => showToast("WhatsApp fetch error: " + e.message, "error"));
     }
