@@ -1118,6 +1118,10 @@ export default function CRM() {
 
   const addLead = async () => {
     if (!newLead.nombre) return showToast("El nombre es requerido", "error");
+    if (newLead.whatsapp) {
+      const digits = newLead.whatsapp.replace(/\D/g, "");
+      if (digits.length > 0 && digits.length < 10) return showToast("El número WhatsApp debe tener 10 dígitos (ej. 7471234567)", "error");
+    }
     const lead = {
       ...newLead,
       whatsapp: normalizarWhatsapp(newLead.whatsapp),
