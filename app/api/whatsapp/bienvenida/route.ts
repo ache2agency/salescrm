@@ -28,11 +28,18 @@ export async function POST(request: Request) {
 
   try {
     if (provider === 'meta') {
-      await sendMetaWhatsAppTemplate({
-        to: normalized,
-        templateName: 'seguimiento_general',
-        parameters: [nombre],
-      })
+      // Intentar con el número normalizado; si falla con 133010, probar con formato +521 (México legacy)
+      try {
+        await sendMetaWhatsAppTemplate({ to: normalized, templateName: 'seguimiento_general', parameters: [nombre] })
+      } catch (e1: unknown) {
+        const msg1 = e1 instanceof Error ? e1.message : String(e1)
+        if (msg1.includes('133010') && normalized.startsWith('+52') && !normalized.startsWith('+521')) {
+          const withOne = '+521' + normalized.slice(3)
+          await sendMetaWhatsAppTemplate({ to: withOne, templateName: 'seguimiento_general', parameters: [nombre] })
+        } else {
+          throw e1
+        }
+      }
     } else {
       return Response.json({ error: 'Solo Meta soportado para primer contacto' }, { status: 400 })
     }
