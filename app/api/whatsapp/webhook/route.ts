@@ -1134,7 +1134,9 @@ async function askGPT(params: {
   if (!OPENAI_API_KEY) throw new Error('No OPENAI_API_KEY')
 
   const faseInstruccion: Record<string, string> = {
-    saludo: 'Si el prospecto ya mencionó su nombre en este mensaje, extráelo en el campo "nombre" y avanza (siguienteFase: programa). Si aún no ha dado su nombre, saluda brevemente y pídelo.',
+    saludo: `Si el prospecto ya mencionó su nombre en este mensaje, extráelo en el campo "nombre" y avanza (siguienteFase: programa).
+Si el prospecto hace una pregunta antes de dar su nombre (ej. "¿cuándo inician inscripciones?", "¿cuánto cuesta?"), respóndela brevemente con la información de la BASE y luego pide su nombre para continuar. No ignores la pregunta.
+Si aún no ha dado su nombre ni hecho ninguna pregunta, saluda brevemente y pídelo.`,
 
     programa: `Ya tienes el nombre.
 Si el prospecto dice "inglés" o "ingles" sin especificar más, NO asumas cuál — pregunta cuál de las tres opciones le interesa:
@@ -1145,8 +1147,9 @@ Si NO mencionó ningún programa, el campo "programa" debe ser null y pide amabl
 NO listes el catálogo tú mismo — eso se maneja de forma separada.`,
 
     correo: `El prospecto eligió un programa. ANTES de dar información del programa, pide su correo electrónico brevemente para dar seguimiento personalizado.
-Si el prospecto proporciona su correo en este mensaje, acusa recibo calurosamente antes de avanzar (ej. "¡Perfecto, ya tengo tu correo!") — captura el email en el campo "email" del JSON y pon siguienteFase: info_enviada.
-Si no lo quiere dar, da una respuesta evasiva, o dice que no tiene, avanza de todas formas a info_enviada.
+Si el prospecto proporciona un correo válido (debe contener @ y un dominio, ej. nombre@gmail.com), acusa recibo calurosamente — captura el email en el campo "email" del JSON y pon siguienteFase: info_enviada.
+Si el mensaje NO contiene un correo válido (ej. responde "sí", "claro", "ok", "si claro", un nombre, o cualquier cosa sin @), NO avances — vuelve a pedir el correo con amabilidad, explicando que lo necesitas para enviarle la información. Deja "email": null y siguienteFase: correo.
+Si explícitamente no quiere darlo o dice que no tiene, avanza de todas formas a info_enviada con "email": null.
 No menciones el programa todavía — solo pide el correo.`,
 
     info_enviada: `Da la información del programa usando la BASE DE CONOCIMIENTO: duración, costos (inscripción y mensualidad), horarios, modalidad, certificaciones, campo laboral.
