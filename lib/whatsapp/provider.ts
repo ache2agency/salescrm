@@ -42,34 +42,18 @@ export async function sendMetaWhatsAppTemplate({
   const { accessToken, phoneNumberId } = getMetaConfig()
   if (!accessToken || !phoneNumberId) throw new Error('Faltan variables de entorno de Meta')
 
-  const toFormatted = normalizePhoneNumber(to).replace(/^\+/, '')
+  const toNormalized = normalizePhoneNumber(to)
 
-  const response = await fetch(
-    `https://graph.facebook.com/v23.0/${phoneNumberId}/messages`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        messaging_product: 'whatsapp',
-        recipient_type: 'individual',
-        to: toFormatted,
-        type: 'template',
-        template: {
-          name: templateName,
-          language: { code: 'es_MX' },
-          components: [
-            {
-              type: 'body',
-              parameters: parameters.map(v => ({ type: 'text', text: v })),
-            },
-          ],
-        },
-      }),
-    }
-  )
+  const response = await metaPostWithRetry(phoneNumberId, accessToken, toNormalized, {
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    type: 'template',
+    template: {
+      name: templateName,
+      language: { code: 'es_MX' },
+      components: [{ type: 'body', parameters: parameters.map(v => ({ type: 'text', text: v })) }],
+    },
+  })
 
   const data = await response.json().catch(() => null)
   if (!response.ok) {
@@ -77,6 +61,25 @@ export async function sendMetaWhatsAppTemplate({
     throw new Error(detail)
   }
   return { id: data?.messages?.[0]?.id || null, raw: data }
+}
+
+/** Intenta enviar y si falla con #133010 reintenta con formato +521 (México legacy) */
+async function metaPostWithRetry(phoneNumberId: string, accessToken: string, toNormalized: string, payload: object): Promise<Response> {
+  const toFormatted = toNormalized.replace(/^\+/, '')
+  const url = `https://graph.facebook.com/v23.0/${phoneNumberId}/messages`
+  const headers = { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }
+
+  const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify({ ...payload, to: toFormatted }) })
+  if (!res.ok) {
+    const data = await res.clone().json().catch(() => null)
+    const errCode = data?.error?.code || data?.error?.error_data?.details || ''
+    if ((String(errCode).includes('133010') || JSON.stringify(data).includes('133010')) &&
+        toNormalized.startsWith('+52') && !toNormalized.startsWith('+521')) {
+      const withOne = '+521' + toNormalized.slice(3)
+      return fetch(url, { method: 'POST', headers, body: JSON.stringify({ ...payload, to: withOne.replace(/^\+/, '') }) })
+    }
+  }
+  return res
 }
 
 export async function sendMetaWhatsAppMessage({
@@ -94,41 +97,20 @@ export async function sendMetaWhatsAppMessage({
     )
   }
 
-  const toFormatted = normalizePhoneNumber(to).replace(/^\+/, '')
+  const toNormalized = normalizePhoneNumber(to)
+  const toFormatted = toNormalized.replace(/^\+/, '')
 
-  const response = await fetch(
-    `https://graph.facebook.com/v23.0/${phoneNumberId}/messages`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        messaging_product: 'whatsapp',
-        recipient_type: 'individual',
-        to: toFormatted,
-        type: 'text',
-        text: {
-          body,
-        },
-      }),
-    }
-  )
+  const response = await metaPostWithRetry(phoneNumberId, accessToken, toNormalized, {
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    type: 'text',
+    text: { body },
+  })
 
   const data = await response.json().catch(() => null)
 
   if (!response.ok) {
-    const detail =
-      (data &&
-        typeof data === 'object' &&
-        'error' in data &&
-        typeof data.error === 'object' &&
-        data.error &&
-        'message' in data.error &&
-        typeof data.error.message === 'string' &&
-        data.error.message) ||
-      `HTTP ${response.status}`
+    const detail = data?.error?.message || `HTTP ${response.status}`
     throw new Error(detail)
   }
 
