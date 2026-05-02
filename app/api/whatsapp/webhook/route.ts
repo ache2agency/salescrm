@@ -1362,24 +1362,34 @@ export async function POST(request: Request) {
 
           const { data: insertedLead } = await supabase
             .from('leads')
-            .insert([
-              {
-                nombre: '',
-                email: '',
-                whatsapp: whatsappValue,
-                curso: 'WhatsApp - Instituto Windsor',
-                valor: 0,
-                notas: `Lead creado automáticamente desde WhatsApp.${profileName ? ' Nombre WA: ' + profileName : ''}`,
-                stage: 'contactado',
-                fecha: today,
-                ...(defaultAssignee ? { asignado_a: defaultAssignee } : {}),
-              },
-            ])
+            .upsert(
+              [
+                {
+                  nombre: '',
+                  email: '',
+                  whatsapp: whatsappValue,
+                  curso: 'WhatsApp - Instituto Windsor',
+                  valor: 0,
+                  notas: `Lead creado automáticamente desde WhatsApp.${profileName ? ' Nombre WA: ' + profileName : ''}`,
+                  stage: 'contactado',
+                  fecha: today,
+                  ...(defaultAssignee ? { asignado_a: defaultAssignee } : {}),
+                },
+              ],
+              { onConflict: 'whatsapp', ignoreDuplicates: true }
+            )
             .select('id, nombre, email, curso, stage, whatsapp')
-            .single()
+            .maybeSingle()
 
-          leadId = insertedLead?.id
-          leadSnapshot = (insertedLead as LeadSnapshot | null) || null
+          // Si upsert no devolvió nada (ya existía), buscar el lead existente
+          const finalLead = insertedLead ?? (await supabase
+            .from('leads')
+            .select('id, nombre, email, curso, stage, whatsapp')
+            .eq('whatsapp', whatsappValue)
+            .maybeSingle()).data
+
+          leadId = finalLead?.id
+          leadSnapshot = (finalLead as LeadSnapshot | null) || null
 
           if (leadId) {
             const { error: activityError } = await supabase.from('lead_activities').insert([
