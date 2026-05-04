@@ -2200,6 +2200,8 @@ export default function CRM() {
             confirmReturnToBotIfNeeded={confirmReturnToBotIfNeeded}
             fetchConvMessages={fetchConvMessages}
             setAgentMessage={setAgentMessage}
+            setView={setView}
+            setSelectedLead={setSelectedLead}
             leads={leads}
             vendedores={vendedores}
             getConversationBadgeStyle={getConversationBadgeStyle}

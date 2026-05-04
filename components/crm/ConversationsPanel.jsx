@@ -225,6 +225,8 @@ export default function ConversationsPanel({
   selectedConvOwner,
   selectedLeadAssigned,
   setHumanMode,
+  setView,
+  setSelectedLead,
   convMessages,
   agentMessage,
   sendAgentReply,
@@ -493,6 +495,16 @@ export default function ConversationsPanel({
                   <div className="wa-chat-sub">{getModeLabel(selectedConv)} · {getPhaseLabel(selectedConv.fase)}</div>
                 </div>
                 <div className="wa-chat-actions">
+                  {selectedConvLead && (
+                    <button
+                      className="wa-ctrl-btn"
+                      style={{ background: "rgba(255,255,255,0.15)", color: "#fff" }}
+                      onClick={() => { setView("kanban"); setSelectedLead(selectedConvLead); }}
+                      title="Ver tarjeta del lead en el Kanban"
+                    >
+                      ← Kanban
+                    </button>
+                  )}
                   <button
                     className="wa-ctrl-btn"
                     style={{ background: selectedConv.modo_humano ? "rgba(255,255,255,0.15)" : "#fff", color: selectedConv.modo_humano ? "rgba(255,255,255,0.35)" : WA_GREEN }}
