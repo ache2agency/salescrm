@@ -1136,6 +1136,7 @@ async function askGPT(params: {
   const faseInstruccion: Record<string, string> = {
     saludo: `Si el prospecto ya mencionó su nombre en este mensaje, extráelo en el campo "nombre" y avanza (siguienteFase: programa).
 Si el prospecto hace una pregunta antes de dar su nombre (ej. "¿cuándo inician inscripciones?", "¿cuánto cuesta?"), respóndela brevemente con la información de la BASE y luego pide su nombre para continuar. No ignores la pregunta.
+Si pregunta por varias licenciaturas o varios programas en general, menciona brevemente los programas disponibles y que hay promociones vigentes, pero NO intentes resumir precios de múltiples programas (podrías equivocarte). Pide su nombre y que elija un programa para darle el detalle exacto.
 Si aún no ha dado su nombre ni hecho ninguna pregunta, saluda brevemente y pídelo.`,
 
     programa: `Ya tienes el nombre.
@@ -1233,6 +1234,8 @@ REGLAS:
 - Si claramente no le interesa, pon noInterest: true.
 - "programa": nombre que usó el prospecto, o null.
 - "telefono": teléfono dado en este mensaje (en fase asesor), o null.
+- PRECIOS: NUNCA calcules precios ni descuentos tú mismo. Copia los precios EXACTOS de la BASE DE CONOCIMIENTO tal como están escritos. Si la BASE no tiene el precio exacto, NO lo inventes — di que le darás el detalle cuando elija el programa específico.
+- Si el prospecto pregunta por varias licenciaturas o programas en general (sin elegir uno), da solo una vista general muy breve (mención de programas, duración, existencia de promociones) y pide que elija uno específico para darle el detalle completo y exacto. No intentes resumir precios de múltiples programas.
 - "siguienteFase": saludo, programa, correo, info_enviada, dudas, accion, asesor, inscripcion, clase_prueba, cerrado, perdido, seguimiento.
 
 Responde ÚNICAMENTE con JSON válido:
@@ -1531,8 +1534,8 @@ export async function POST(request: Request) {
             leadSummary = partes.join(' | ')
           }
         }
-      } catch {
-        // Si falla la creación del lead, no bloqueamos la respuesta de WhatsApp
+      } catch (e) {
+        console.error('[webhook] Error creando lead/conversación:', e)
       }
     }
 

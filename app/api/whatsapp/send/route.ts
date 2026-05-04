@@ -204,6 +204,15 @@ export async function POST(request: Request) {
           { status: 500 }
         )
       }
+      if (msg.includes('133010') || msg.includes('131047') || msg.toLowerCase().includes('not registered') || msg.toLowerCase().includes('24 hours')) {
+        return NextResponse.json(
+          {
+            error: 'No se pudo enviar el mensaje',
+            detail: 'El número no está disponible en WhatsApp o la ventana de 24h venció. El lead debe escribirte primero para poder responderle.',
+          },
+          { status: 422 }
+        )
+      }
     }
 
     // Guía clara cuando Twilio rechaza el número "From" (configuración WhatsApp)

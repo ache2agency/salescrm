@@ -57,7 +57,8 @@ export async function sendMetaWhatsAppTemplate({
 
   const data = await response.json().catch(() => null)
   if (!response.ok) {
-    const detail = data?.error?.message || `HTTP ${response.status}`
+    const code = data?.error?.code ? `#${data.error.code} ` : ''
+    const detail = `${code}${data?.error?.message || `HTTP ${response.status}`}`
     throw new Error(detail)
   }
   return { id: data?.messages?.[0]?.id || null, raw: data }
@@ -110,7 +111,8 @@ export async function sendMetaWhatsAppMessage({
   const data = await response.json().catch(() => null)
 
   if (!response.ok) {
-    const detail = data?.error?.message || `HTTP ${response.status}`
+    const code = data?.error?.code ? `#${data.error.code} ` : ''
+    const detail = `${code}${data?.error?.message || `HTTP ${response.status}`}`
     throw new Error(detail)
   }
 

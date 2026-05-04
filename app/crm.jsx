@@ -138,6 +138,7 @@ export default function CRM() {
   const [agentMessage, setAgentMessage] = useState("");
   const [sendingAgent, setSendingAgent] = useState(false);
   const sendingAgentRef = useRef(false);
+  const [sendingReactivacion, setSendingReactivacion] = useState(false);
   const [sendingInfoLeadId, setSendingInfoLeadId] = useState(null);
   const [leadInfoDraft, setLeadInfoDraft] = useState("");
   const [labScenario, setLabScenario] = useState("ads");
@@ -849,6 +850,30 @@ export default function CRM() {
     }
   };
 
+  const sendReactivacion = async () => {
+    if (!selectedConv || sendingReactivacion) return;
+    setSendingReactivacion(true);
+    try {
+      const res = await fetch("/api/whatsapp/reactivar-manual", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversacion_id: selectedConv.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data?.error || "Error enviando plantilla de reactivación", "error");
+        return;
+      }
+      const now = new Date().toISOString();
+      setConvMessages((prev) => [...prev, { id: `local-${now}`, rol: "agente", contenido: data.contenido, created_at: now }]);
+      showToast("Plantilla de reactivación enviada. El lead puede responderte ahora.");
+    } catch (e) {
+      showToast(e?.message || "Error enviando reactivación", "error");
+    } finally {
+      setSendingReactivacion(false);
+    }
+  };
+
   const sendLeadInformation = async (lead) => {
     if (!lead?.id || !lead?.whatsapp) {
       showToast("Este lead no tiene un WhatsApp registrado", "error");
@@ -1487,7 +1512,7 @@ export default function CRM() {
         @keyframes slideUp { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform: translateY(0); } }
         .col-drop { min-height: 80px; border-radius: 6px; transition: background 0.2s; }
         .col-drop.drag-over { background: rgba(200,16,46,0.05); border: 1px dashed #A8263C; }
-        .stat-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; }
+        .stat-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 16px; }
         .nav-btn { background: transparent; border: none; cursor: pointer; font-family: inherit; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; padding: 8px 16px; border-radius: 6px; transition: all 0.15s; }
         .nav-btn.active { background: #A8263C; color: #ffffff; font-weight: 500; }
         .nav-btn:not(.active) { color: rgba(255,255,255,0.7); }
@@ -1597,19 +1622,47 @@ export default function CRM() {
 
       <div className={view === "kanban" ? "kanban-wrapper" : ""} style={{ maxWidth: view === "agenda" ? "none" : 1400, margin: "0 auto", padding: view === "agenda" ? "12px 16px" : view === "convs" ? "0" : "24px", flex: 1, minHeight: 0, display: (view === "convs" || view === "agenda") ? "flex" : "block", flexDirection: "column", overflowY: (view === "convs" || view === "agenda") ? "hidden" : "auto" }}>
         {/* STATS */}
-        <div className="stat-card-grid" style={{ display: (view === "convs" || view === "agenda") ? "none" : "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
-          {[
-            { label: "PIPELINE TOTAL", value: formatPeso(pipelineValue), sub: `${filteredLeads.filter((l) => !["inscrito","perdido","archivado"].includes(normalizeStage(l.stage))).length} leads activos`, color: "#4A90D9" },
-            { label: "INSCRITOS", value: formatPeso(totalRevenue), sub: `${leads.filter((l) => normalizeStage(l.stage) === "inscrito").length} cierres`, color: "#27AE60" },
-            { label: "TASA DE CIERRE", value: `${convRate}%`, sub: `de ${leads.length} leads totales`, color: "#E8A838" },
-            { label: "LEADS HOY", value: leads.filter(l => l.fecha === todayCST()).length, sub: "nuevos ingresos", color: "#E85D38" },
-          ].map((s, i) => (
-            <div key={i} className="stat-card">
-              <div style={{ fontSize: 10, color: "#555", letterSpacing: 2, marginBottom: 8 }}>{s.label}</div>
-              <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 36, color: s.color, lineHeight: 1 }}>{s.value}</div>
-              <div style={{ fontSize: 11, color: "#555", marginTop: 6 }}>{s.sub}</div>
-            </div>
-          ))}
+        <div style={{ display: (view === "convs" || view === "agenda") ? "none" : "block", marginBottom: 20 }}>
+          {/* Stats compactas */}
+          <div className="stat-card-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 10 }}>
+            {[
+              { label: "PIPELINE TOTAL", value: formatPeso(pipelineValue), sub: `${filteredLeads.filter((l) => !["inscrito","perdido","archivado"].includes(normalizeStage(l.stage))).length} activos`, color: "#4A90D9" },
+              { label: "INSCRITOS", value: formatPeso(totalRevenue), sub: `${leads.filter((l) => normalizeStage(l.stage) === "inscrito").length} cierres`, color: "#27AE60" },
+              { label: "TASA DE CIERRE", value: `${convRate}%`, sub: `de ${leads.length} totales`, color: "#E8A838" },
+              { label: "LEADS HOY", value: leads.filter(l => l.fecha === todayCST()).length, sub: "nuevos ingresos", color: "#E85D38" },
+            ].map((s, i) => (
+              <div key={i} className="stat-card">
+                <div style={{ fontSize: 9, color: "#888", letterSpacing: 1.5, marginBottom: 4 }}>{s.label}</div>
+                <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 28, color: s.color, lineHeight: 1 }}>{s.value}</div>
+                <div style={{ fontSize: 10, color: "#777", marginTop: 3 }}>{s.sub}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desglose por oferta educativa */}
+          {(() => {
+            const activos = leads.filter(l => !["inscrito","perdido","archivado"].includes(normalizeStage(l.stage)));
+            const conteo = {};
+            activos.forEach(l => {
+              const prog = l.curso && l.curso !== "WhatsApp - Instituto Windsor" ? l.curso : null;
+              if (prog) conteo[prog] = (conteo[prog] || 0) + 1;
+            });
+            const items = Object.entries(conteo).sort((a,b) => b[1]-a[1]);
+            if (items.length === 0) return null;
+            const COLORES = ["#4A90D9","#A8263C","#27AE60","#E8A838","#7B5EA7","#0891B2","#D97706","#E85D38"];
+            return (
+              <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "8px 14px", display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                <span style={{ fontSize: 9, color: "#888", letterSpacing: 1.5, textTransform: "uppercase", marginRight: 4 }}>Por programa</span>
+                {items.map(([prog, n], i) => (
+                  <span key={prog} style={{ display: "inline-flex", alignItems: "center", gap: 5, background: COLORES[i % COLORES.length] + "15", border: `1px solid ${COLORES[i % COLORES.length]}40`, borderRadius: 20, padding: "3px 10px", fontSize: 11, color: "#1a1a1a" }}>
+                    <span style={{ width: 7, height: 7, borderRadius: "50%", background: COLORES[i % COLORES.length], flexShrink: 0 }} />
+                    {prog}
+                    <strong style={{ color: COLORES[i % COLORES.length] }}>{n}</strong>
+                  </span>
+                ))}
+              </div>
+            );
+          })()}
         </div>
 
         {/* FILTROS */}
@@ -2159,6 +2212,8 @@ export default function CRM() {
             agentMessage={agentMessage}
             sendAgentReply={sendAgentReply}
             sendingAgent={sendingAgent}
+            sendReactivacion={sendReactivacion}
+            sendingReactivacion={sendingReactivacion}
             closeLead={closeLead}
           />
         )}

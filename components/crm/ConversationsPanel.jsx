@@ -229,6 +229,8 @@ export default function ConversationsPanel({
   agentMessage,
   sendAgentReply,
   sendingAgent,
+  sendReactivacion,
+  sendingReactivacion,
   closeLead,
 }) {
   const [mobileView, setMobileView] = useState("list");
@@ -506,6 +508,15 @@ export default function ConversationsPanel({
                     disabled={!selectedConv.modo_humano}
                   >
                     BOT
+                  </button>
+                  <button
+                    className="wa-ctrl-btn"
+                    style={{ background: "#7B5EA7", color: "#fff", opacity: sendingReactivacion ? 0.6 : 1 }}
+                    onClick={sendReactivacion}
+                    disabled={sendingReactivacion}
+                    title="Enviar plantilla de seguimiento cuando la ventana de 24h venció"
+                  >
+                    {sendingReactivacion ? "..." : "Reactivar"}
                   </button>
                   <button
                     className="wa-ctrl-btn"
