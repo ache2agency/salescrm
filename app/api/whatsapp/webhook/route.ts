@@ -1781,9 +1781,16 @@ function detectarCategoriaInteres(texto: string): CategoriaInteres {
   return null
 }
 
-function mensajeCategoriaInteres(categoria: CategoriaInteres, nombre: string): string | null {
+function mensajeCategoriaInteres(categoria: CategoriaInteres, nombre: string, esNinos: boolean = false): string | null {
   const saludo = `¡Hola ${nombre}! 😊`
   if (categoria === 'idiomas') {
+    // Si el mensaje original ya decía "para niños"/"kids", no ofrecer el catálogo de
+    // adultos — el único curso de idiomas para niños es Inglés para niños (Francés e
+    // Italiano no tienen variante infantil documentada). Caso real Estela, 2026-09-06:
+    // pidió "idiomas para niños" y el bot le ofreció Inglés adultos/Francés/Italiano.
+    if (esNinos) {
+      return `${saludo} Para niños (4 a 12 años) tenemos nuestro curso de *Inglés para niños*. ¿Te gustaría conocer los detalles (horarios, precios)?`
+    }
     return `${saludo} Para adultos y jóvenes tenemos estas opciones de idiomas:\n\n• Inglés para adultos\n• Francés\n• Italiano\n\n¿Cuál te interesa conocer?`
   }
   if (categoria === 'licenciaturas') {
@@ -1807,13 +1814,28 @@ function mensajeCategoriaInteres(categoria: CategoriaInteres, nombre: string): s
 // apartar mi lugar" estando en curso "verano". Ahora redirigen de forma explícita al curso
 // regular de idiomas (abierto todo el año), que es el proceso vigente real (caso real:
 // Tania Itzel, lead de "Verano adultos", 2026-09-04, marcado como error en el CRM).
-const INSCRIPCION_VERANO_NINOS_MSG = `¡Buena noticia! 🎈 La edición de este año de *My Best Summer* ya concluyó, pero tenemos nuestro curso regular de *Inglés para niños* abierto todo el año — te comparto cómo inscribirte:
+const VERANO_NINOS_REDIRECT_BASE = `¡Buena noticia! 🎈 La edición de este año de *My Best Summer* ya concluyó, pero tenemos nuestro curso regular de *Inglés para niños* abierto todo el año — te comparto cómo inscribirte:
 
-${INFO_MSGS['Inglés para niños']}${buildCTA('Inglés para niños')}`
+${INFO_MSGS['Inglés para niños']}`
 
-const INSCRIPCION_VERANO_ADULTOS_MSG = `¡Buena noticia! 🎈 La edición de este año de *My Best Summer* ya concluyó, pero tenemos nuestro curso regular de *Inglés para adultos* abierto todo el año — te comparto cómo inscribirte:
+const VERANO_ADULTOS_REDIRECT_BASE = `¡Buena noticia! 🎈 La edición de este año de *My Best Summer* ya concluyó, pero tenemos nuestro curso regular de *Inglés para adultos* abierto todo el año — te comparto cómo inscribirte:
 
-${INFO_MSGS['Inglés para adultos']}${buildCTA('Inglés para adultos')}`
+${INFO_MSGS['Inglés para adultos']}`
+
+const INSCRIPCION_VERANO_NINOS_MSG = VERANO_NINOS_REDIRECT_BASE + buildCTA('Inglés para niños')
+const INSCRIPCION_VERANO_ADULTOS_MSG = VERANO_ADULTOS_REDIRECT_BASE + buildCTA('Inglés para adultos')
+
+// El bug de arriba (Tania Itzel) solo se corrigió para el paso de "quiero inscribirme".
+// Pero INFO_MSGS['Cursos de verano niños'/'adultos'] (definidos arriba, con las fechas de
+// julio-agosto y "Inscripciones abiertas") se siguen usando tal cual en varios otros sitios
+// de este archivo (info general del programa, resend tras capturar correo, etc., todos los
+// cuales agregan su propio buildCTA() aparte — por eso aquí se usa el _BASE sin CTA, igual
+// que el resto de las entradas de INFO_MSGS) — cualquiera de esos sitios le habría mandado a
+// un lead la misma promoción de una temporada ya concluida sin pasar por "inscribirme". Se
+// sobreescriben aquí para que TODOS los consumidores de INFO_MSGS (fuente de verdad única)
+// redirijan al curso regular vigente.
+INFO_MSGS['Cursos de verano niños'] = VERANO_NINOS_REDIRECT_BASE
+INFO_MSGS['Cursos de verano adultos'] = VERANO_ADULTOS_REDIRECT_BASE
 
 const INSCRIPCION_LICS_MSG = `🎉 ¡Felicidades por tomar esta decisión!
 
@@ -3264,7 +3286,8 @@ STAGES POSIBLES: primer_contacto, contactado, interesado, inscripcion_pendiente,
             .map((message) => message.content)
             .join(' ')
           const categoriaPrevia = detectarCategoriaInteres(contextoPrevioUsuario)
-          const respuestaCategoria = mensajeCategoriaInteres(categoriaPrevia, nombreCapturado)
+          const esNinosPrevio = /ni[ñn]os?|infantil(es)?|\bkids?\b/i.test(contextoPrevioUsuario)
+          const respuestaCategoria = mensajeCategoriaInteres(categoriaPrevia, nombreCapturado, esNinosPrevio)
           if (respuestaCategoria) {
             await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, respuestaCategoria, 'programa')
             return buildProviderResponse(provider, respuestaCategoria, waNumber)
@@ -3564,6 +3587,22 @@ STAGES POSIBLES: primer_contacto, contactado, interesado, inscripcion_pendiente,
         // A/B/C interceptor: respuestas a la disambiguación de inglés (respuesta de una letra)
         const msgTrimProg = originalText.trim()
         const msgLProg = msgTrimProg.toLowerCase()
+
+        // Selección múltiple ("El A y el B", "adultos y niños") tras la disambiguación de
+        // inglés: antes no matcheaba ningún caso de abajo y terminaba escalando a un asesor
+        // sin necesidad (caso real, 2026-09-05: "El A y el B" → "permíteme confirmarlo con
+        // un asesor"). Se manda la info de ambos y se pide elegir cuál registrar como
+        // programa principal — el lead solo puede tener un "curso" guardado a la vez.
+        const lastBotMsgProg = convHistory.filter((m) => m.role === 'assistant').pop()?.content || ''
+        const eraDisambigIngles = /tres opciones de ingl[eé]s/i.test(lastBotMsgProg)
+        const pideAdultosMulti = /\ba\b/.test(msgLProg) || /\badultos?\b/i.test(msgLProg)
+        const pideNinosMulti = /\bb\b/.test(msgLProg) || /\bni[ñn]os?\b/i.test(msgLProg)
+        if (eraDisambigIngles && pideAdultosMulti && pideNinosMulti) {
+          const ambosMsg = `¡Con gusto te comparto ambos! 😊\n\n${INFO_MSGS['Inglés para adultos']}\n\n➖➖➖➖➖\n\n${INFO_MSGS['Inglés para niños']}\n\n¿Cuál de los dos registro como tu programa para darte seguimiento? (A: adultos / B: niños)`
+          await logBotMessageAndUpdateFase(supabase, conversacionIdOuter, ambosMsg, 'programa')
+          return buildProviderResponse(provider, ambosMsg, waNumber)
+        }
+
         let programaIngles: string | null = null
         if (/^\s*a\s*$/.test(msgLProg) || (/\badultos?\b/i.test(msgTrimProg) && !/verano|summer/i.test(msgLProg))) programaIngles = 'Inglés para adultos'
         else if (/^\s*b\s*$/.test(msgLProg) || (/\bni[ñn]os?\b/i.test(msgTrimProg) && !/verano|summer/i.test(msgLProg))) programaIngles = 'Inglés para niños'

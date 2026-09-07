@@ -62,7 +62,7 @@ function getAvailableBlocks(tipo, date) {
   // Niños: Mar/Mié/Jue → dos bloques · Sáb → un bloque
   if (dow === 2 || dow === 3 || dow === 4) {
     return [
-      { label: "13:00–14:00", value: "13:00" },
+      { label: "13:30–14:30", value: "13:30" },
       { label: "17:00–18:00", value: "17:00" },
     ];
   } else if (dow === 6) {

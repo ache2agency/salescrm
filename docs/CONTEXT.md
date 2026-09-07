@@ -86,7 +86,7 @@ La lógica de roles se basa en el campo `rol` en `profiles` y/o metadatos de usu
     - Adulto Lun–Vie: `10:00–12:00` · `17:00–19:00`
     - Adulto Sábado: `09:00–13:00` · `13:00–17:00`
     - Adulto Domingo: sin disponibilidad
-    - Niño Mar/Mié/Jue: `13:00–14:00` · `17:00–18:00`
+    - Niño Mar/Mié/Jue: `13:30–14:30` · `17:00–18:00`
     - Niño Sábado: `09:00–13:00`
   - Formulario: nombre, **edad**, email, WhatsApp, notas. La edad se guarda en `notas` como `"Edad: X años\n..."`.
   - Al confirmar: crea lead con `stage: "clase_muestra"` y cita con `tipo: "clase_prueba"`, `duracion: 60`.

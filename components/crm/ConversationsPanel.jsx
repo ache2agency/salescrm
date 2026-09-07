@@ -40,7 +40,7 @@ Dirigido a niños de 4 a 12 años
 *🎓 Modalidad:* Presencial y Online
 
 *🕐 Horarios presenciales:*
-• Martes a jueves: 13:00 - 14:00 hrs o 17:00 - 18:00 hrs
+• Martes a jueves: 13:30 - 14:30 hrs o 17:00 - 18:00 hrs
 • Sabatino: 09:00 - 13:00 hrs
 
 *🛜 Horarios online:*
@@ -531,7 +531,7 @@ https://drive.google.com/file/d/16t52QPG1FGbNHU0SpQurS7e08ZxSfrH_/view?usp=drive
     { label: "Inglés niños", texto: `🕐 *Horarios — Inglés para Niños*
 
 *Presencial:*
-• Martes a jueves: 13:00 - 14:00 hrs o 17:00 - 18:00 hrs
+• Martes a jueves: 13:30 - 14:30 hrs o 17:00 - 18:00 hrs
 • Sabatino: 09:00 - 13:00 hrs
 
 *Online:*
