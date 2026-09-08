@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { createClient } from "@/utils/supabase/client";
 import AgendaPanel from "@/components/crm/AgendaPanel";
 import ConversationsPanel from "@/components/crm/ConversationsPanel";
+import { MANUAL_UNREAD_AT, matchesConversationInbox } from "@/lib/whatsapp/conversation-filters.mjs";
 import KanbanBoard from "@/components/crm/KanbanBoard";
 import LeadsTable from "@/components/crm/LeadsTable";
 import LeadDetailModal from "@/components/crm/LeadDetailModal";
@@ -168,6 +169,8 @@ export default function CRM() {
   const [selectedConv, setSelectedConv] = useState(null);
   const [convMessages, setConvMessages] = useState([]);
   const [convSearch, setConvSearch] = useState("");
+  const [convInboxFilter, setConvInboxFilter] = useState("todas");
+  const [guardandoSeguimientoId, setGuardandoSeguimientoId] = useState(null);
   const [convModeFilter, setConvModeFilter] = useState("todos");
   const [convPhaseFilter, setConvPhaseFilter] = useState("todas");
   const [convVentanaFilter, setConvVentanaFilter] = useState(false);
@@ -632,7 +635,8 @@ export default function CRM() {
     const requestId = ++whatsConvsRequestRef.current;
     const INITIAL_PAGE_SIZE = 300;
     const PAGE_SIZE = 1000;
-    const selectColsFull = "id, whatsapp, lead_id, estado, ultimo_mensaje_at, modo_humano, tomado_por, fase, visto_at";
+    const selectColsPrevious = "id, whatsapp, lead_id, estado, ultimo_mensaje_at, modo_humano, tomado_por, fase, visto_at";
+    const selectColsFull = `${selectColsPrevious}, seguimiento_manual`;
     const selectColsFallback = "id, whatsapp, lead_id, estado, ultimo_mensaje_at";
     const runQuery = (selectCols, from, to) =>
       supabase
@@ -646,8 +650,13 @@ export default function CRM() {
     {
       const { data, error } = await runQuery(selectCols, 0, INITIAL_PAGE_SIZE - 1);
       if (error) {
-        selectCols = selectColsFallback;
-        const fallback = await runQuery(selectCols, 0, INITIAL_PAGE_SIZE - 1);
+        // Mantener lectura/modo/fase si falta únicamente la nueva migración.
+        selectCols = selectColsPrevious;
+        let fallback = await runQuery(selectCols, 0, INITIAL_PAGE_SIZE - 1);
+        if (fallback.error) {
+          selectCols = selectColsFallback;
+          fallback = await runQuery(selectCols, 0, INITIAL_PAGE_SIZE - 1);
+        }
         if (fallback.error) {
           showToast("Error cargando conversaciones de WhatsApp", "error");
           return [];
@@ -689,7 +698,7 @@ export default function CRM() {
   // (para el punto 1) o las que el chequeo básico (ultimo_mensaje_at vs
   // visto_at) marca como posible no-leída (para el punto 2) — el resto ya
   // está garantizado fuera de ventana / leída sin necesidad de consultarlo.
-  const fetchUltimosUsuarioMensajes = async (convs, { merge = false } = {}) => {
+  const fetchUltimosUsuarioMensajes = async (convs) => {
     const ahora = Date.now();
     const convIds = convs
       .filter((c) => {
@@ -700,27 +709,38 @@ export default function CRM() {
       })
       .map((c) => c.id);
     if (convIds.length === 0) {
-      if (!merge) setUltimoUsuarioAtPorConv({});
       return;
     }
     const mapa = {};
     for (const chunk of chunkArray(convIds, 200)) {
-      const { data: msgs, error } = await supabase
-        .from("whatsapp_mensajes")
-        .select("conversacion_id, created_at")
-        .in("conversacion_id", chunk)
-        .eq("rol", "usuario")
-        .order("created_at", { ascending: false });
-      if (error) continue;
-      for (const m of msgs || []) {
-        if (!mapa[m.conversacion_id]) mapa[m.conversacion_id] = m.created_at;
+      let pendientes = chunk;
+      while (pendientes.length) {
+        const { data: msgs, error } = await supabase
+          .from("whatsapp_mensajes")
+          .select("conversacion_id, created_at")
+          .in("conversacion_id", pendientes)
+          .eq("rol", "usuario")
+          .order("created_at", { ascending: false })
+          .limit(1000);
+        if (error || !msgs?.length) break;
+        for (const m of msgs) {
+          if (!mapa[m.conversacion_id]) mapa[m.conversacion_id] = m.created_at;
+        }
+        // Un chat muy activo puede ocupar las 1000 filas. Consultar los IDs
+        // aún pendientes evita ocultar no leídos de conversaciones más antiguas.
+        pendientes = pendientes.filter((id) => !mapa[id]);
+        if (msgs.length < 1000) break;
       }
     }
-    // El polling de la lista (merge: true) solo trae las conversaciones más
-    // recientes — reemplazar el mapa completo borraría el estado "no leído"
-    // de conversaciones viejas que quedaron fuera de esa muestra.
-    if (merge) setUltimoUsuarioAtPorConv((prev) => ({ ...prev, ...mapa }));
-    else setUltimoUsuarioAtPorConv(mapa);
+    // Las páginas iniciales y el polling pueden terminar fuera de orden.
+    // Conservar siempre la fecha más reciente por conversación.
+    setUltimoUsuarioAtPorConv((prev) => {
+      const next = { ...prev };
+      for (const [id, date] of Object.entries(mapa)) {
+        if (!next[id] || new Date(date) > new Date(next[id])) next[id] = date;
+      }
+      return next;
+    });
   };
 
   // Auto-refresh de TODA la lista de conversaciones (no solo la abierta) mientras
@@ -737,7 +757,7 @@ export default function CRM() {
     try {
       const { data, error } = await supabase
         .from("whatsapp_conversaciones")
-        .select("id, whatsapp, lead_id, estado, ultimo_mensaje_at, modo_humano, tomado_por, fase, visto_at")
+        .select("id, whatsapp, lead_id, estado, ultimo_mensaje_at, modo_humano, tomado_por, fase, visto_at, seguimiento_manual")
         .order("ultimo_mensaje_at", { ascending: false })
         .limit(100);
       if (error || !data) return;
@@ -752,6 +772,7 @@ export default function CRM() {
             old.fase !== fresh.fase ||
             old.modo_humano !== fresh.modo_humano ||
             old.visto_at !== fresh.visto_at ||
+            old.seguimiento_manual !== fresh.seguimiento_manual ||
             old.estado !== fresh.estado ||
             old.tomado_por !== fresh.tomado_por
           ) {
@@ -762,7 +783,13 @@ export default function CRM() {
         if (!huboCambios) return prev;
         return Array.from(byId.values()).sort((a, b) => new Date(b.ultimo_mensaje_at) - new Date(a.ultimo_mensaje_at));
       });
-      if (huboCambios) fetchUltimosUsuarioMensajes(data, { merge: true });
+      setSelectedConv((prev) => {
+        const fresh = data.find((c) => c.id === prev?.id);
+        return fresh && fresh.seguimiento_manual !== prev.seguimiento_manual
+          ? { ...prev, seguimiento_manual: fresh.seguimiento_manual }
+          : prev;
+      });
+      if (huboCambios) fetchUltimosUsuarioMensajes(data);
     } finally {
       whatsConvsPollingRef.current = false;
     }
@@ -1054,7 +1081,7 @@ export default function CRM() {
     if (!conv) return;
     // Fecha sentinel para "no leído" manual. Evita confundir una base que aún
     // no tenga la migración `visto_at` aplicada con una conversación pendiente.
-    const visto_at = visto ? new Date().toISOString() : "1970-01-01T00:00:00.000Z";
+    const visto_at = visto ? new Date().toISOString() : MANUAL_UNREAD_AT;
     const { error } = await supabase
       .from("whatsapp_conversaciones")
       .update({ visto_at })
@@ -1063,6 +1090,28 @@ export default function CRM() {
     setSelectedConv((prev) => (prev && prev.id === conv.id ? { ...prev, visto_at } : prev));
     setWhatsConvs((prev) => prev.map((c) => (c.id === conv.id ? { ...c, visto_at } : c)));
     if (!visto) showToast("Conversación marcada como no leída");
+  };
+
+  const setConvSeguimiento = async (conv, seguimiento) => {
+    if (!conv || guardandoSeguimientoId) return;
+    setGuardandoSeguimientoId(conv.id);
+    try {
+      // Con sesión del asesor: las políticas RLS limitan qué puede actualizar.
+      const { data, error } = await supabase
+        .from("whatsapp_conversaciones")
+        .update({ seguimiento_manual: seguimiento })
+        .eq("id", conv.id)
+        .select("id, seguimiento_manual")
+        .single();
+      if (error || !data) throw new Error("No se pudo guardar la marca de seguimiento. Intenta de nuevo.");
+      setWhatsConvs((prev) => prev.map((c) => c.id === conv.id ? { ...c, seguimiento_manual: data.seguimiento_manual } : c));
+      setSelectedConv((prev) => prev?.id === conv.id ? { ...prev, seguimiento_manual: data.seguimiento_manual } : prev);
+      showToast(data.seguimiento_manual ? "Conversación marcada para seguimiento" : "Marca de seguimiento retirada");
+    } catch (error) {
+      showToast(error.message || "No se pudo guardar el seguimiento", "error");
+    } finally {
+      setGuardandoSeguimientoId(null);
+    }
   };
 
   // Marca/desmarca un mensaje del bot como error — queda guardado en Supabase
@@ -1436,8 +1485,9 @@ export default function CRM() {
     const matchesVentana = !convVentanaFilter ||
       (elapsedDesdeUsuario !== null && elapsedDesdeUsuario >= 0 && elapsedDesdeUsuario < 24 * 60 * 60 * 1000);
     const matchesAtorada = !convAtoradaFilter || esAtorada(conv);
-    return matchesSearch && matchesMode && matchesPhase && matchesVentana && matchesAtorada;
-  }), [whatsConvs, ultimoUsuarioAtPorConv, isAdmin, currentProfile, leads, convSearch, convModeFilter, convPhaseFilter, convVentanaFilter, convAtoradaFilter]);
+    const matchesInbox = matchesConversationInbox(conv, ultimoUsuarioAt, convInboxFilter);
+    return matchesSearch && matchesMode && matchesPhase && matchesVentana && matchesAtorada && matchesInbox;
+  }), [whatsConvs, ultimoUsuarioAtPorConv, isAdmin, currentProfile, leads, convSearch, convModeFilter, convPhaseFilter, convVentanaFilter, convAtoradaFilter, convInboxFilter]);
 
   const selectedConvLead = leads.find((lead) => lead.id === selectedConv?.lead_id) || null;
   const selectedConvOwner = vendedores.find((v) => v.id === selectedConv?.tomado_por) || null;
@@ -2834,6 +2884,8 @@ export default function CRM() {
             ultimoUsuarioAtPorConv={ultimoUsuarioAtPorConv}
             convSearch={convSearch}
             setConvSearch={setConvSearch}
+            convInboxFilter={convInboxFilter}
+            setConvInboxFilter={setConvInboxFilter}
             convModeFilter={convModeFilter}
             setConvModeFilter={setConvModeFilter}
             convPhaseFilter={convPhaseFilter}
@@ -2866,6 +2918,8 @@ export default function CRM() {
             selectedLeadAssigned={selectedLeadAssigned}
             setHumanMode={setHumanMode}
             setConvVisto={setConvVisto}
+            setConvSeguimiento={setConvSeguimiento}
+            guardandoSeguimientoId={guardandoSeguimientoId}
             convMessages={convMessages}
             sendAgentReply={sendAgentReply}
             sendingAgent={sendingAgent}

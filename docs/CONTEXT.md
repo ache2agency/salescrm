@@ -283,6 +283,16 @@ La lógica de roles se basa en el campo `rol` en `profiles` y/o metadatos de usu
 - Reactivaciones: Vercel ejecuta `/api/whatsapp/reactivacion` diariamente. El endpoint identifica silencio por fase (incluye reactivación a ~20 h cuando el último mensaje fue del bot) pero **solo encola** el texto en `mensajes_pendientes`; no existe un envío automático posterior ni una vista del CRM para revisar esa cola. El primer experimento recomendado es un panel **Reactivaciones sugeridas** con editar/enviar/descartar, antes de automatizar envíos.
 - Relevo bot-humano: mientras `modo_humano = true` el bot debe permanecer pausado. No cambiar fase por cada mensaje del asesor; al volver a BOT, elegir de forma explícita la fase de reanudación (dudas, siguiente paso, inscripción o cerrar) para evitar que el bot retome una fase vieja y contradiga al asesor.
 
+### 8.2 Filtros y seguimiento manual (2026-09-08)
+
+- CONVERSACIONES incorpora los filtros **Todas / No leídas / Por seguir**, combinables con búsqueda, modo, fase y ventana activa. El filtro de no leídas comparte la misma función que el punto verde y respeta la marca manual incluso después de recargar desde Supabase.
+- **☆ Dar seguimiento / ★ Por seguir** agrega o retira una marca manual de la conversación. Se guarda en `whatsapp_conversaciones.seguimiento_manual`, compartida entre asesores bajo las políticas RLS existentes. No cambia stage, fase o modo del bot, no envía mensajes ni agenda recordatorios. Abrir o responder el chat no retira la marca.
+- Migración: `supabase/migration_conversaciones_seguimiento_manual.sql`. Harold agregó el campo en producción el 8-sep y se verificó por API (HTTP 200, tipo boolean). El código usa la sesión del asesor y las políticas RLS existentes para guardar la marca; la lectura de la lista y el polling incorporan el campo.
+- La lista vuelve al principio al cambiar filtros. Los controles del chat móvil permiten desplazamiento horizontal desde el primer botón.
+- La carga del último mensaje del prospecto consulta los IDs pendientes cuando alcanza 1,000 filas para no omitir chats menos activos. Las cargas concurrentes conservan la fecha más reciente de cada chat.
+- Verificación de lógica: `node --test scripts/test-conversation-filters.mjs`. Build: `npm run build -- --webpack`. Las pruebas de UI con datos ficticios no sustituyen comprobar persistencia con sesión autenticada después de aplicar la migración.
+- Validación del 8-sep: cuatro pruebas de lógica y prueba interactiva en Chrome (250 chats ficticios, lectura/reapertura, marcar/quitar seguimiento, filtro desde scroll profundo y viewport móvil de 390 px) pasaron; build pasó. Lint de archivos modificados: sin errores, ocho advertencias existentes. `npm run crm:check` se detiene en 18 errores previos de `no-explicit-any` del webhook, archivo sin cambios en esta tarea.
+
 ### 9. Marketing y Ventas (Ecosistema Externo)
 
 - **Documentación completa**: Ver `docs/marketing/` para toda la estrategia

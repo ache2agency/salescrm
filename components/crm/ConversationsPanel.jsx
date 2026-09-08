@@ -1,5 +1,6 @@
 "use client";
 import { useState, useRef, useEffect, useMemo, Fragment, memo } from "react";
+import { isConvUnread } from "@/lib/whatsapp/conversation-filters.mjs";
 
 const RESPUESTAS_RAPIDAS = [
   { grupo: "Idiomas", items: [
@@ -599,7 +600,6 @@ const WA_TEAL = "#128C7E";
 const WA_BUBBLE_OUT = "#DCF8C6";
 const WA_BUBBLE_IN = "#FFFFFF";
 const WA_BG = "#E5DDD5";
-const MANUAL_UNREAD_AT = "1970-01-01T00:00:00.000Z";
 
 function getInitials(name) {
   if (!name) return "?";
@@ -657,23 +657,6 @@ function formatListTime(dateStr) {
     : { day: "2-digit", month: "2-digit", year: "2-digit", timeZone: "America/Mexico_City" });
 }
 
-// "No leído" debe depender de si el ÚLTIMO MENSAJE DEL LEAD (rol "usuario")
-// es más reciente que visto_at — no de ultimo_mensaje_at, que también se
-// actualiza cuando responde el bot o el propio asesor (eso marcaba como no
-// leídas conversaciones donde el asesor acababa de contestar). lastUserMsgAt
-// viene de ultimoUsuarioAtPorConv, precomputado en app/crm.jsx solo para las
-// conversaciones candidatas (ver fetchUltimosUsuarioMensajes).
-function isConvUnread(c, lastUserMsgAt) {
-  if (!c.ultimo_mensaje_at) return false;
-  // La fecha sentinel es una acción manual del asesor: debe restaurar el
-  // punto verde aunque el mapa del último mensaje todavía no se haya refrescado.
-  if (c.visto_at === MANUAL_UNREAD_AT) return true;
-  const candidato = !c.visto_at || new Date(c.ultimo_mensaje_at) > new Date(c.visto_at);
-  if (!candidato) return false;
-  if (!lastUserMsgAt) return false;
-  return new Date(lastUserMsgAt) > new Date(c.visto_at);
-}
-
 const PLANTILLA_LABELS = {
   seguimiento_general: "Seguimiento general",
   windsor_promo: "Promoción vigente",
@@ -688,6 +671,8 @@ function ConversationsPanel({
   ultimoUsuarioAtPorConv,
   convSearch,
   setConvSearch,
+  convInboxFilter,
+  setConvInboxFilter,
   convModeFilter,
   setConvModeFilter,
   convPhaseFilter,
@@ -718,6 +703,8 @@ function ConversationsPanel({
   selectedLeadAssigned,
   setHumanMode,
   setConvVisto,
+  setConvSeguimiento,
+  guardandoSeguimientoId,
   setView,
   setSelectedLead,
   convMessages,
@@ -750,6 +737,16 @@ function ConversationsPanel({
   const [listViewportHeight, setListViewportHeight] = useState(700);
   const scrollRafRef = useRef(null);
   const latestScrollTopRef = useRef(0);
+
+  // Al filtrar una lista virtualizada desde abajo, volver a sus primeras filas.
+  useEffect(() => {
+    if (listRef.current) listRef.current.scrollTop = 0;
+    latestScrollTopRef.current = 0;
+    if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current);
+    scrollRafRef.current = null;
+    const frame = requestAnimationFrame(() => setListScrollTop(0));
+    return () => cancelAnimationFrame(frame);
+  }, [convSearch, convInboxFilter, convModeFilter, convPhaseFilter, convVentanaFilter, convAtoradaFilter]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -795,6 +792,7 @@ function ConversationsPanel({
   const handleSelectConv = async (c) => {
     if (c.id === selectedConv?.id) {
       setMobileView("chat");
+      if (isConvUnread(c, ultimoUsuarioAtPorConv?.[c.id])) setConvVisto(c, true);
       fetchConvMessages(c.id, { silent: true });
       return;
     }
@@ -844,6 +842,10 @@ function ConversationsPanel({
         .wa-search input { width: 100%; background: #fff; border: none; border-radius: 20px; padding: 8px 14px; font-size: 13px; color: #1a1a1a; outline: none; box-sizing: border-box; }
         .wa-filters { padding: 6px 12px; display: flex; gap: 6px; border-bottom: 1px solid #e9edef; }
         .wa-filters select { flex: 1; background: #f0f2f5; border: none; border-radius: 12px; padding: 5px 8px; font-size: 11px; color: #54656f; outline: none; }
+        .wa-inbox-filters { display: flex; gap: 6px; padding: 6px 12px; }
+        .wa-inbox-filters button { flex: 1; border: none; border-radius: 14px; padding: 8px 6px; background: #f0f2f5; color: #54656f; font-size: 12px; font-weight: 600; cursor: pointer; }
+        .wa-inbox-filters button[aria-pressed="true"] { background: #d9fdd3; color: #075e54; }
+        .wa-followup-marker { color: #9a6700; flex-shrink: 0; font-size: 14px; }
         .wa-convs-count { padding: 5px 16px; font-size: 11px; color: #8696a0; }
         .wa-list-items { flex: 1; overflow-y: auto; }
         .wa-item { display: flex; align-items: center; gap: 12px; padding: 10px 16px; cursor: pointer; border-bottom: 1px solid #f0f2f5; transition: background 0.1s; }
@@ -910,7 +912,7 @@ function ConversationsPanel({
           .wa-chat { display: ${mobileView === "chat" ? "flex" : "none"}; width: 100%; max-width: 100%; overflow-x: hidden; }
           .wa-chat-header { padding: 8px 10px; gap: 6px; flex-wrap: wrap; overflow: visible; }
           .wa-chat-header-info { min-width: 0; }
-          .wa-chat-actions { width: 100%; gap: 4px; overflow-x: auto; padding: 2px 0; justify-content: flex-end; -webkit-overflow-scrolling: touch; }
+          .wa-chat-actions { width: 100%; gap: 4px; overflow-x: auto; padding: 2px 0; justify-content: flex-start; -webkit-overflow-scrolling: touch; }
           .wa-ctrl-btn { padding: 5px 7px; font-size: 10px; white-space: nowrap; flex-shrink: 0; }
           .wa-back-btn { display: block !important; font-size: 18px; }
           .wa-info-cards { grid-template-columns: 1fr 1fr; display: ${showInfoCards ? "grid" : "none"}; padding: 6px 10px; gap: 6px; }
@@ -1040,6 +1042,13 @@ function ConversationsPanel({
               ))}
             </select>
           </div>
+          <div className="wa-inbox-filters" aria-label="Filtrar conversaciones">
+            {[["todas", "Todas"], ["no_leidas", "No leídas"], ["por_seguir", "Por seguir"]].map(([value, label]) => (
+              <button key={value} aria-pressed={convInboxFilter === value} onClick={() => setConvInboxFilter(value)}>
+                {label}
+              </button>
+            ))}
+          </div>
           {setConvVentanaFilter && (
             <div style={{ padding: "4px 12px 6px" }}>
               <button
@@ -1103,7 +1112,7 @@ function ConversationsPanel({
             const ROW_HEIGHT = 68;
             const OVERSCAN = 8;
             const total = filteredWhatsConvs.length;
-            const startIndex = Math.max(0, Math.floor(listScrollTop / ROW_HEIGHT) - OVERSCAN);
+            const startIndex = Math.min(Math.max(0, total - 1), Math.max(0, Math.floor(listScrollTop / ROW_HEIGHT) - OVERSCAN));
             const visibleCount = Math.ceil(listViewportHeight / ROW_HEIGHT) + OVERSCAN * 2;
             const endIndex = Math.min(total, startIndex + visibleCount);
             const topPad = startIndex * ROW_HEIGHT;
@@ -1156,6 +1165,7 @@ function ConversationsPanel({
                       <div className="wa-item-row2">
                         <span className="wa-item-preview">{c.provider === "messenger" ? `💬 Messenger` : `${getModeIcon(c)} ${c.whatsapp}`}</span>
                         {unread && <span className="wa-unread-dot" title="No leído" />}
+                        {c.seguimiento_manual && <span className="wa-followup-marker" title="Pendiente de seguimiento" aria-label="Pendiente de seguimiento">★</span>}
                         {restanteVentana && (
                           <span
                             className="wa-ventana-badge"
@@ -1208,6 +1218,16 @@ function ConversationsPanel({
                   </div>
                 </div>
                 <div className="wa-chat-actions">
+                  <button
+                    className="wa-ctrl-btn"
+                    style={{ background: selectedConv.seguimiento_manual ? "#fef3c7" : "#fff", color: "#854d0e", opacity: guardandoSeguimientoId === selectedConv.id ? 0.6 : 1 }}
+                    onClick={() => setConvSeguimiento(selectedConv, !selectedConv.seguimiento_manual)}
+                    disabled={guardandoSeguimientoId === selectedConv.id}
+                    aria-pressed={!!selectedConv.seguimiento_manual}
+                    title={selectedConv.seguimiento_manual ? "Quitar marca de seguimiento" : "Guardar esta conversación para darle seguimiento"}
+                  >
+                    {guardandoSeguimientoId === selectedConv.id ? "Guardando…" : selectedConv.seguimiento_manual ? "★ Por seguir" : "☆ Dar seguimiento"}
+                  </button>
                   {selectedConvLead && (
                     <button
                       className="wa-ctrl-btn"
